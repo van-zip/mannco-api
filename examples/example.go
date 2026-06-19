@@ -20,8 +20,15 @@ func main() {
 	}
 
 	// instantiate your  API client
-	jwtToken := "your_jwt_token_here"
-	client := api.NewClient(jwtToken, customHTTPClient)
+	client := api.NewClient("", customHTTPClient)
+
+	// fetch your auth token
+	fmt.Println("--- Fetching JWT ---")
+	apiKey := "xxxxxxxxxxxxxxxxxxxxxxxxx"
+	_, err := client.UserLogin(ctx, apiKey)
+	if err != nil {
+		log.Fatalf("Login failed: %v", err)
+	}
 
 	fmt.Println("--- Fetching User Balance ---")
 	balance, err := client.Balance(ctx)
@@ -31,33 +38,10 @@ func main() {
 
 	fmt.Printf("Current Account Balance: $%.2f\n\n", float64(balance)/100.0)
 
-	fmt.Println("--- Fetching 6-Month Sales History (Filtered) ---")
-	salesOpts := &api.HistoryOptions{
-		Page:   1,
-		Limit:  5,
-		Period: api.Period6Months,
-		Search: "Key",
-	}
-
-	salesHistory, err := client.SalesHistory(ctx, salesOpts)
-	if err != nil {
-		log.Fatalf("Failed to retrieve sales history: %v", err)
-	}
-
-	fmt.Printf("Found %d total historical sales matching criteria. Showing first page:\n", salesHistory.Count)
-	for i, item := range salesHistory.Values {
-		fmt.Printf("%d. [%s] Sold for: $%.2f (ID: %d)\n",
-			i+1,
-			item.Name,
-			float64(item.Price)/100.0,
-			item.IDItem,
-		)
-	}
-	fmt.Println()
-
 	fmt.Println("--- Fetching Bulk Pricing Data ---")
 
-	targetIDs := []int{215, 30015, 1024}
+	// Max's severed head, Earbuds, Bill's hat ids
+	targetIDs := []int{371, 958, 803}
 	bulkData, err := client.ItemPricingBulk(ctx, targetIDs)
 	if err != nil {
 		log.Printf("Warning: Failed bulk pricing call: %v", err)
@@ -69,7 +53,7 @@ func main() {
 		bulkData.RefreshedItems,
 	)
 	for _, item := range bulkData.Items {
-		fmt.Printf(" - Item ID %d | Lowest Sale Listing: $%.2f | Suggested Value: $%.2f\n",
+		fmt.Printf(" - Item ID %d | Lowest Sale: $%.2f | Suggested Value: $%.2f\n",
 			item.ItemID,
 			float64(item.Pricing.LowestSalePrice)/100.0,
 			float64(item.Pricing.SuggestedPrice)/100.0,

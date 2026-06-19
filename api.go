@@ -249,7 +249,7 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 }
 
 /*
-	Endpoints
+Endpoints
 */
 
 func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
@@ -263,6 +263,9 @@ func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	c.SetJWT(content.JWT)
+
 	return content.JWT, nil
 }
 
