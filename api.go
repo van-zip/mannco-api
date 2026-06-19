@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const DefaultBaseURL = "https://api.mannco.store/"
+const BaseURL = "https://api.mannco.store/"
 
 /*
 	Datatypes
@@ -177,7 +177,7 @@ func NewClient(jwt string, httpClient *http.Client) *Client {
 		}
 	}
 	return &Client{
-		baseURL:    DefaultBaseURL,
+		baseURL:    BaseURL,
 		jwt:        jwt,
 		httpClient: httpClient,
 	}
