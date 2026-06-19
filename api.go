@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -161,9 +162,10 @@ type ListingOptions struct {
 }
 
 type Client struct {
+	httpClient *http.Client
+	mu         sync.RWMutex
 	baseURL    string
 	jwt        string
-	httpClient *http.Client
 }
 
 /*
@@ -184,14 +186,21 @@ func NewClient(jwt string, httpClient *http.Client) *Client {
 }
 
 func (c *Client) SetJWT(token string) {
+	c.mu.Lock()
 	c.jwt = token
+	c.mu.Unlock()
+}
+func (c *Client) GetJWT() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.jwt
 }
 
 // executeRequest performs generic parsing, safety handling, and raw IO operations
 func executeRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
-	u, err := url.Parse(c.baseURL + endpoint)
+	u, err := url.Parse(c.GetBaseURL() + endpoint)
 	if err != nil {
 		return target, fmt.Errorf("invalid endpoint url: %w", err)
 	}
@@ -210,8 +219,8 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.jwt != "" {
-		req.Header.Set("Authorization", "Bearer "+c.jwt)
+	if jwt := c.GetJWT(); jwt != "" {
+		req.Header.Set("Authorization", "Bearer "+jwt)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -386,4 +395,15 @@ func (c *Client) ItemListings(ctx context.Context, itemID int, userID string, op
 
 func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
 	return executeRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
+}
+
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
+}
+
+func (c *Client) GetBaseURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.baseURL
+
 }
