@@ -11,11 +11,11 @@ A Go wrapper for the Mannco.store API (`https://docs.mannco.store`)
   - [x] Automatic Bearer Token injection headers
   - [x] Client-level active JWT state management (`SetJWT`)
 ---
-### [Authentication & Session](https://docs.mannco.store/authentication)
+### [Authentication & Session](https://docs.mannco.store/api-reference/authentication)
 - [x] **Login & Tokens**
   - [x] `POST /user/login`  Exchange API key for a fresh session JWT (`UserLogin`)
 ---
-### [Items & Pricing](https://docs.mannco.store/items)
+### [Items & Pricing](https://docs.mannco.store/api-reference/items)
 - [x] **Item Discovery & Stats**
   - [x] `GET /item/salesGraph/{item}`  High-resolution historical trade data (`ItemSalesGraph`)
   - [x] `GET /item/listing/{item}`  Paginated market listings with user/bot filtering (`ItemListings`)
@@ -26,7 +26,7 @@ A Go wrapper for the Mannco.store API (`https://docs.mannco.store`)
 - [x] **Market Orders**
   - [x] `POST /item/buyorder`  Create new automatic buy orders (`CreateBuyOrder`)
 ---
-### [User Profiles & History](https://docs.mannco.store/user)
+### [User Profiles & History](https://docs.mannco.store/api-reference/user)
 - [x] **Account Data**
   - [x] `GET /user/balance`  Direct wallet integer cents querying (`Balance`)
 - [x] **Historical Ledgers**
@@ -36,10 +36,35 @@ A Go wrapper for the Mannco.store API (`https://docs.mannco.store`)
   - [ ] `GET /user/getCashoutHistory`
   - [ ] `GET /user/getTransactionDetails`
 ---
-### [Trade Offers](https://docs.mannco.store/offers)
+### [Trade Offers](https://docs.mannco.store/api-reference/offers)
 - [ ] **Offer Intake & Operations**
   - [ ] `GET /offers/received`
   - [ ] `GET /offers/my`
   - [ ] `POST /offers/create`
   - [ ] `POST /offers/accept`
-  - [ ] `POST /offers
+  - [ ] `POST /offers/decline`
+  - [ ] `POST /offers/remove`
+---
+### [On-Site Inventories & Bot Logistics](https://docs.mannco.store/api-reference/inventory)
+- [ ] **Virtual Wallets**
+  - [ ] `GET /inventory/onSale`
+  - [ ] `GET /inventory/onInventory`
+  - [ ] `POST /inventory/withdraw`
+  - [ ] `POST /inventory/price`
+- [ ] **Steam Network Trades**
+  - [ ] `GET /trades/active`
+  - [ ] `GET /trades/all`
+  - [ ] `GET /trade/resend`
+- [ ] **Deposit Gateway**
+  - [ ] `POST /deposit/trade`
+  - [ ] `POST /deposit/trade/instant`
+  - [ ] `GET /deposit/tradeStatus/{tradeid}`
+---
+### [Cart & Checkout](https://docs.mannco.store/api-reference/cart)
+- [ ] **Cart Actions**
+  - [ ] `GET /cart/get`
+  - [ ] `POST /cart/add`
+  - [ ] `POST /cart/bulk`
+  - [ ] `POST /cart/remove`
+  - [ ] `POST /cart/update`
+  - [ ] `POST /cart/clear`
