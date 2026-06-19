@@ -13,11 +13,23 @@ import (
 	"time"
 )
 
-const BaseUrl = "https://api.mannco.store/"
+const DefaultBaseURL = "https://api.mannco.store/"
 
-var httpClient = &http.Client{
-	Timeout: 60 * time.Second,
-}
+/*
+	Datatypes
+*/
+
+// period represents the valid time frames
+type Period string
+
+const (
+	Period1Month  Period = "1M"
+	Period3Months Period = "3M"
+	Period6Months Period = "6M"
+	Period1Year   Period = "1Y"
+	Period5Years  Period = "5Y"
+	PeriodAll     Period = "ALL"
+)
 
 type ApiResponse[T any] struct {
 	Err     bool   `json:"err"`
@@ -29,56 +41,44 @@ type ApiResponse[T any] struct {
 type PriceHistoryPoint struct {
 	Date  string `json:"date"`
 	Price int    `json:"price"`
-	Nb    int    `json:"nb"` // Number of sales (volume)
+	Nb    int    `json:"nb"`
 }
 
 type PriceHistoryPayload struct {
 	Values []PriceHistoryPoint `json:"values"`
 }
 
-type Period string
-
-// all valid time frames
-const (
-	Period1Month  Period = "1M"
-	Period3Months Period = "3M"
-	Period6Months Period = "6M"
-	Period1Year   Period = "1Y"
-	Period5Years  Period = "5Y"
-	PeriodAll     Period = "ALL"
-)
-
 type LoginPayload struct {
 	JWT string `json:"jwt"`
 }
 
 type BalancePayload struct {
-	Balance int `json:"balance"` // Returned in pennies
+	Balance int `json:"balance"`
 }
 
 type Item struct {
 	Count        int    `json:"count"`
-	Date         int64  `json:"date"` // Unix timestamp
+	Date         int64  `json:"date"`
 	Effect       string `json:"effect"`
 	Festivized   int    `json:"festivized"`
 	IDBackpack   int    `json:"idbackpack"`
 	IDItem       int    `json:"iditem"`
-	Image        string `json:"image"` // The image asset hash
+	Image        string `json:"image"`
 	Inspect      string `json:"inspect"`
 	Killstreaker string `json:"killstreaker"`
 	Level        int    `json:"level"`
 	Name         string `json:"name"`
 	Paint        string `json:"paint"`
 	Parts        string `json:"parts"`
-	Price        int    `json:"price"` // Price in pennies
+	Price        int    `json:"price"`
 	Sheen        string `json:"sheen"`
 	Spell        string `json:"spell"`
 	URL          string `json:"url"`
 }
 
 type LastSale struct {
-	Date  int64 `json:"date"`  // Unix timestamp
-	Price int   `json:"price"` // Price in pennies
+	Date  int64 `json:"date"`
+	Price int   `json:"price"`
 }
 
 type PricingData struct {
@@ -147,10 +147,51 @@ type buyOrderRequest struct {
 	Amount int `json:"amount"`
 }
 
-func executeRequest[T any](ctx context.Context, method, endpoint, jwt string, body []byte, queryParams url.Values) (T, error) {
+type HistoryOptions struct {
+	Page   int
+	Limit  int // either count or per page b/c mannco is inconsistent
+	Period Period
+	Search string
+}
+
+type ListingOptions struct {
+	Count int
+	Page  int
+	Game  int
+}
+
+type Client struct {
+	baseURL    string
+	jwt        string
+	httpClient *http.Client
+}
+
+/*
+	Library specific functionality
+*/
+
+func NewClient(jwt string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Timeout: 60 * time.Second,
+		}
+	}
+	return &Client{
+		baseURL:    DefaultBaseURL,
+		jwt:        jwt,
+		httpClient: httpClient,
+	}
+}
+
+func (c *Client) SetJWT(token string) {
+	c.jwt = token
+}
+
+// executeRequest performs generic parsing, safety handling, and raw IO operations
+func executeRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
-	u, err := url.Parse(BaseUrl + endpoint)
+	u, err := url.Parse(c.baseURL + endpoint)
 	if err != nil {
 		return target, fmt.Errorf("invalid endpoint url: %w", err)
 	}
@@ -169,23 +210,27 @@ func executeRequest[T any](ctx context.Context, method, endpoint, jwt string, bo
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if jwt != "" {
-		req.Header.Set("Authorization", "Bearer "+jwt)
+	if c.jwt != "" {
+		req.Header.Set("Authorization", "Bearer "+c.jwt)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return target, fmt.Errorf("network call execution failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return target, fmt.Errorf("server rejected request with status code: %d", resp.StatusCode)
-	}
-
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return target, fmt.Errorf("failed reading raw response bytes: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var apiErr ApiResponse[json.RawMessage]
+		if json.Unmarshal(bodyBytes, &apiErr) == nil && apiErr.Message != "" {
+			return target, fmt.Errorf("server rejected request with status code %d: %s", resp.StatusCode, apiErr.Message)
+		}
+		return target, fmt.Errorf("server rejected request with status code: %d", resp.StatusCode)
 	}
 
 	var apiResponse ApiResponse[T]
@@ -203,87 +248,97 @@ func executeRequest[T any](ctx context.Context, method, endpoint, jwt string, bo
 	return apiResponse.Content, nil
 }
 
-func UserLogin(ctx context.Context, apiKey string) (string, error) {
+/*
+	Endpoints
+*/
+
+func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 	data := map[string]string{"apiKey": apiKey}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return "", fmt.Errorf("error encoding json for user login: %w", err)
 	}
 
-	content, err := executeRequest[LoginPayload](ctx, "POST", "user/login", "", jsonData, nil)
+	content, err := executeRequest[LoginPayload](ctx, c, "POST", "user/login", jsonData, nil)
 	if err != nil {
 		return "", err
 	}
 	return content.JWT, nil
 }
 
-func Balance(ctx context.Context, jwt string) (int, error) {
-	content, err := executeRequest[BalancePayload](ctx, "GET", "user/balance", jwt, nil, nil)
+func (c *Client) Balance(ctx context.Context) (int, error) {
+	content, err := executeRequest[BalancePayload](ctx, c, "GET", "user/balance", nil, nil)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 	return content.Balance, nil
 }
 
-func TransactionHistory(ctx context.Context, jwt string, page, limit int) (InventoryPayload, error) {
+func (c *Client) TransactionHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
-	if page > 0 {
-		params.Add("page", strconv.Itoa(page))
+	if opts != nil {
+		if opts.Page > 0 {
+			params.Add("page", strconv.Itoa(opts.Page))
+		}
+		if opts.Limit > 0 {
+			params.Add("limit", strconv.Itoa(opts.Limit))
+		}
 	}
-	if limit > 0 {
-		params.Add("limit", strconv.Itoa(limit))
-	}
-	return executeRequest[InventoryPayload](ctx, "GET", "user/getTransactionHistory", jwt, nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getTransactionHistory", nil, params)
 }
 
-func SalesHistory(ctx context.Context, jwt string, page, perPage int, period Period, search string) (InventoryPayload, error) {
+func (c *Client) SalesHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
-	if page > 0 {
-		params.Add("page", strconv.Itoa(page))
+	if opts != nil {
+		if opts.Page > 0 {
+			params.Add("page", strconv.Itoa(opts.Page))
+		}
+		if opts.Limit > 0 {
+			params.Add("perPage", strconv.Itoa(opts.Limit))
+		}
+		if opts.Period != "" {
+			params.Add("timeRange", string(opts.Period))
+		}
+		if opts.Search != "" {
+			params.Add("search", opts.Search)
+		}
 	}
-	if perPage > 0 {
-		params.Add("perPage", strconv.Itoa(perPage))
-	}
-	if period != "" {
-		params.Add("timeRange", string(period))
-	}
-	if search != "" {
-		params.Add("search", search)
-	}
-	return executeRequest[InventoryPayload](ctx, "GET", "user/getSalesHistory", jwt, nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getSalesHistory", nil, params)
 }
 
-func PurchaseHistory(ctx context.Context, jwt string, page, count int) (InventoryPayload, error) {
+func (c *Client) PurchaseHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
-	if page > 0 {
-		params.Add("page", strconv.Itoa(page))
+	if opts != nil {
+		if opts.Page > 0 {
+			params.Add("page", strconv.Itoa(opts.Page))
+		}
+		if opts.Limit > 0 {
+			params.Add("count", strconv.Itoa(opts.Limit))
+		}
 	}
-	if count > 0 {
-		params.Add("count", strconv.Itoa(count))
-	}
-	return executeRequest[InventoryPayload](ctx, "GET", "user/getPurchaseHistory", jwt, nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getPurchaseHistory", nil, params)
 }
 
-func ItemPricing(ctx context.Context, jwt string, id int) (PriceItem, error) {
-	return executeRequest[PriceItem](ctx, "GET", "item/pricing/"+strconv.Itoa(id), jwt, nil, nil)
+func (c *Client) ItemPricing(ctx context.Context, itemID int) (PriceItem, error) {
+	return executeRequest[PriceItem](ctx, c, "GET", "item/pricing/"+strconv.Itoa(itemID), nil, nil)
 }
 
-func ItemPricingBulk(ctx context.Context, jwt string, ids []int) (BulkPricingPayload, error) {
-	if len(ids) > 100 {
+func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricingPayload, error) {
+	if len(itemIDs) > 100 {
 		return BulkPricingPayload{}, fmt.Errorf("the pricing bulk endpoint has a limit of 100 ids")
 	}
-	idStrings := make([]string, len(ids))
-	for i, id := range ids {
+	idStrings := make([]string, len(itemIDs))
+	for i, id := range itemIDs {
 		idStrings[i] = strconv.Itoa(id)
 	}
 	params := url.Values{}
 	params.Add("items", strings.Join(idStrings, ","))
-	return executeRequest[BulkPricingPayload](ctx, "GET", "item/pricing/bulk", jwt, nil, params)
+	return executeRequest[BulkPricingPayload](ctx, c, "GET", "item/pricing/bulk", nil, params)
 }
 
-func CreateBuyOrder(ctx context.Context, jwt string, itemid, value, amount int) error {
+func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) error {
 	payload := buyOrderRequest{
-		ItemID: itemid,
+		ItemID: itemID,
 		Value:  value,
 		Amount: amount,
 	}
@@ -291,39 +346,41 @@ func CreateBuyOrder(ctx context.Context, jwt string, itemid, value, amount int) 
 	if err != nil {
 		return fmt.Errorf("error encoding json for creating buy order: %w", err)
 	}
-	_, err = executeRequest[json.RawMessage](ctx, "POST", "item/buyorder", jwt, jsonData, nil)
+	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder", jsonData, nil)
 	return err
 }
 
-func ItemSalesGraph(ctx context.Context, jwt string, itemid int, period Period) (PriceHistoryPayload, error) {
+func (c *Client) ItemSalesGraph(ctx context.Context, itemID int, period Period) (PriceHistoryPayload, error) {
 	if period == "" {
 		period = Period1Month
 	}
 	params := url.Values{}
 	params.Add("period", string(period))
-	return executeRequest[PriceHistoryPayload](ctx, "GET", "item/salesGraph/"+strconv.Itoa(itemid), jwt, nil, params)
+	return executeRequest[PriceHistoryPayload](ctx, c, "GET", "item/salesGraph/"+strconv.Itoa(itemID), nil, params)
 }
 
-func ItemListings(ctx context.Context, jwt string, itemid int, userid string, count, page, game int) (ListingPayload, error) {
-	endpoint := "item/listing/" + strconv.Itoa(itemid)
-	if userid != "" {
-		endpoint += "/" + userid
+func (c *Client) ItemListings(ctx context.Context, itemID int, userID string, opts *ListingOptions) (ListingPayload, error) {
+	endpoint := "item/listing/" + strconv.Itoa(itemID)
+	if userID != "" {
+		endpoint += "/" + userID
 	}
 
 	params := url.Values{}
-	if count > 0 {
-		params.Add("count", strconv.Itoa(count))
-	}
-	if page > 0 {
-		params.Add("page", strconv.Itoa(page))
-	}
-	if game > 0 {
-		params.Add("game", strconv.Itoa(game))
+	if opts != nil {
+		if opts.Count > 0 {
+			params.Add("count", strconv.Itoa(opts.Count))
+		}
+		if opts.Page > 0 {
+			params.Add("page", strconv.Itoa(opts.Page))
+		}
+		if opts.Game > 0 {
+			params.Add("game", strconv.Itoa(opts.Game))
+		}
 	}
 
-	return executeRequest[ListingPayload](ctx, "GET", endpoint, jwt, nil, params)
+	return executeRequest[ListingPayload](ctx, c, "GET", endpoint, nil, params)
 }
 
-func BuyOrderList(ctx context.Context, jwt string, itemid int) (BuyOrderPayload, error) {
-	return executeRequest[BuyOrderPayload](ctx, "GET", "item/buyorderList/"+strconv.Itoa(itemid), jwt, nil, nil)
+func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
+	return executeRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
 }
