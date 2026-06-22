@@ -1,3 +1,4 @@
+# WARNING THIS IS *NOT* A COMPLETE LIBRARY USE AT YOUR OWN RISK
 # Mannco.store API Wrapper
 
 A Go wrapper for the Mannco.store API (`https://docs.mannco.store`)
