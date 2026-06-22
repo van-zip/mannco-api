@@ -32,7 +32,7 @@ const (
 	PeriodAll     Period = "ALL"
 )
 
-type ApiResponse[T any] struct {
+type APIResponse[T any] struct {
 	Err     bool   `json:"err"`
 	Success bool   `json:"success"`
 	Message string `json:"message"`
@@ -235,14 +235,14 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiResponse[json.RawMessage]
+		var apiErr APIResponse[json.RawMessage]
 		if json.Unmarshal(bodyBytes, &apiErr) == nil && apiErr.Message != "" {
 			return target, fmt.Errorf("server rejected request with status code %d: %s", resp.StatusCode, apiErr.Message)
 		}
 		return target, fmt.Errorf("server rejected request with status code: %d", resp.StatusCode)
 	}
 
-	var apiResponse ApiResponse[T]
+	var apiResponse APIResponse[T]
 	if err = json.Unmarshal(bodyBytes, &apiResponse); err != nil {
 		return target, fmt.Errorf("failed decoding response JSON: %w", err)
 	}
