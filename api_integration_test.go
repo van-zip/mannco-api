@@ -12,7 +12,7 @@ import (
 func getTestClient(t *testing.T) (*api.Client, context.Context) {
 	apiKey := os.Getenv("MANNCO_API_KEY")
 	if apiKey == "" {
-		t.Skip("Skipping live test; MANNCO_API_KEY environment variable not set")
+		t.Skip("Skipping live test, MANNCO_API_KEY environment variable not set")
 	}
 
 	client := api.NewClient("", nil)
@@ -38,9 +38,23 @@ func TestLive_Balance(t *testing.T) {
 func TestLive_BuyOrderList(t *testing.T) {
 	client, ctx := getTestClient(t)
 
-	// Use a highly stable item ID you know exists
 	_, err := client.BuyOrderList(ctx, 958)
 	if err != nil {
 		t.Errorf("Live API BuyOrderList call failed: %v", err)
+	}
+}
+
+func TestLive_SalesHistory_WithFilters(t *testing.T) {
+	client, ctx := getTestClient(t)
+
+	opts := &api.HistoryOptions{
+		Page:   1,
+		Limit:  5,
+		Period: api.Period3Months,
+	}
+
+	_, err := client.SalesHistory(ctx, opts)
+	if err != nil {
+		t.Errorf("Live API SalesHistory call failed when using filtering options: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -128,6 +129,24 @@ func TestBalance(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:           "Malformed JSON Payload Handling",
+			mockStatus:     http.StatusOK,
+			mockResponse:   `{"err": false, "success": true, "content": { "balance": "this-should-be-an-int-not-a-string" }}`,
+			expectedPath:   "/user/balance",
+			expectedMethod: http.MethodGet,
+			runTest: func(ctx context.Context, client *Client) (int, error) {
+				return client.Balance(ctx)
+			},
+			assertError: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("expected a JSON unmarshaling failure error, but got nil")
+				}
+				if !strings.Contains(err.Error(), "failed decoding response JSON") {
+					t.Errorf("expected JSON decoding error message context, got: %q", err.Error())
+				}
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -135,7 +154,6 @@ func TestBalance(t *testing.T) {
 	}
 }
 
-// func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
 func TestBuyOrderList(t *testing.T) {
 	tests := []testCase[BuyOrderPayload]{
 		{
