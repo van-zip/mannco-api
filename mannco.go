@@ -20,7 +20,7 @@ const BaseURL = "https://api.mannco.store/"
 	Datatypes
 */
 
-// period represents the valid time frames
+// Period represents the valid time frames
 type Period string
 
 const (
@@ -32,6 +32,7 @@ const (
 	PeriodAll     Period = "ALL"
 )
 
+// The general shape of Mannco.store API responses
 type APIResponse[T any] struct {
 	Err     bool   `json:"err"`
 	Success bool   `json:"success"`
@@ -39,24 +40,29 @@ type APIResponse[T any] struct {
 	Content T      `json:"content"`
 }
 
+// A specific data point from the price history of an item
 type PriceHistoryPoint struct {
 	Date  string `json:"date"`
 	Price int    `json:"price"`
 	Nb    int    `json:"nb"`
 }
 
+// The payload returned by the price history call
 type PriceHistoryPayload struct {
 	Values []PriceHistoryPoint `json:"values"`
 }
 
+// The payload returned by the login call
 type LoginPayload struct {
 	JWT string `json:"jwt"`
 }
 
+// The payload returned by the balance call
 type BalancePayload struct {
 	Balance int `json:"balance"`
 }
 
+// Datatype representing a specific item and all its attributes
 type Item struct {
 	Count        int    `json:"count"`
 	Date         int64  `json:"date"`
@@ -77,11 +83,13 @@ type Item struct {
 	URL          string `json:"url"`
 }
 
+// Datatype containing sale price and date
 type LastSale struct {
 	Date  int64 `json:"date"`
 	Price int   `json:"price"`
 }
 
+// Datatype containing information regarding an item's pricing information
 type PricingData struct {
 	LastSale        LastSale `json:"last_sale"`
 	LowestBuyOrder  int      `json:"lowest_buy_order"`
@@ -90,6 +98,7 @@ type PricingData struct {
 	SuggestedPrice  int      `json:"suggested_price"`
 }
 
+// Datatype which wraps an item's PricingData with additional API relevant information
 type PriceItem struct {
 	FromCache   bool        `json:"from_cache"`
 	ItemID      int         `json:"item_id"`
@@ -97,6 +106,7 @@ type PriceItem struct {
 	Pricing     PricingData `json:"pricing"`
 }
 
+// Payload returned by ItemPricingBulk
 type BulkPricingPayload struct {
 	CachedItems    int         `json:"cached_items"`
 	Items          []PriceItem `json:"items"`
@@ -104,11 +114,13 @@ type BulkPricingPayload struct {
 	TotalItems     int         `json:"total_items"`
 }
 
+// Payload returned by API calls that return multiple items
 type InventoryPayload struct {
 	Count  int    `json:"count"`
 	Values []Item `json:"values"`
 }
 
+// Datatype which represents a specific listing for an item
 type Listing struct {
 	AssetID      string  `json:"assetId"`
 	Bot          string  `json:"bot"`
@@ -128,39 +140,46 @@ type Listing struct {
 	Wear         float64 `json:"wear"`
 }
 
+// Payload returned by ItemListings
 type ListingPayload struct {
 	Count  int       `json:"count"`
 	Values []Listing `json:"values"`
 }
 
+// A specific buy order offer
 type BuyOrderInfo struct {
 	Count int `json:"count"`
 	Price int `json:"price"`
 }
 
+// Payload returned by BuyOrderList
 type BuyOrderPayload struct {
 	Informations map[string]BuyOrderInfo `json:"informations"`
 }
 
+// Datatype to build a buy order request
 type buyOrderRequest struct {
 	ItemID int `json:"itemid"`
 	Value  int `json:"value"`
 	Amount int `json:"amount"`
 }
 
+// Optional struct for filtering on some time relevant endpoints. Note that upstream, limit is represented by either count or per page
 type HistoryOptions struct {
 	Page   int
-	Limit  int // either count or per page b/c mannco is inconsistent
+	Limit  int
 	Period Period
 	Search string
 }
 
+// Optional struct for filtering listings
 type ListingOptions struct {
 	Count int
 	Page  int
 	Game  int
 }
 
+// The base API client which interacts with Mannco.store
 type Client struct {
 	httpClient *http.Client
 	mu         sync.RWMutex
@@ -172,6 +191,7 @@ type Client struct {
 	Library specific functionality
 */
 
+// Instantiates a new API client
 func NewClient(jwt string, httpClient *http.Client) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{
@@ -185,18 +205,36 @@ func NewClient(jwt string, httpClient *http.Client) *Client {
 	}
 }
 
+// Sets the JWT for a client
 func (c *Client) SetJWT(token string) {
 	c.mu.Lock()
 	c.jwt = token
 	c.mu.Unlock()
 }
+
+// Gets the JWT for a client
 func (c *Client) GetJWT() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.jwt
 }
 
-// executeRequest performs generic parsing, safety handling, and raw IO operations
+// Sets the API client base url
+func (c *Client) SetBaseURL(url string) {
+	c.mu.Lock()
+	c.baseURL = url
+	c.mu.Unlock()
+}
+
+// Gets the API client base url
+func (c *Client) GetBaseURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.baseURL
+
+}
+
+// Performs generic parsing, safety handling, and raw IO operations for interactinng with the API
 func executeRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
@@ -261,6 +299,7 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 Endpoints
 */
 
+// Uses the API key to login and return a JWT
 func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 	data := map[string]string{"apiKey": apiKey}
 	jsonData, err := json.Marshal(data)
@@ -278,6 +317,7 @@ func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 	return content.JWT, nil
 }
 
+// Returns the user balance in pennies
 func (c *Client) Balance(ctx context.Context) (int, error) {
 	content, err := executeRequest[BalancePayload](ctx, c, "GET", "user/balance", nil, nil)
 	if err != nil {
@@ -286,6 +326,7 @@ func (c *Client) Balance(ctx context.Context) (int, error) {
 	return content.Balance, nil
 }
 
+// Returns the user transaction history on the site
 func (c *Client) TransactionHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
 	if opts != nil {
@@ -299,6 +340,7 @@ func (c *Client) TransactionHistory(ctx context.Context, opts *HistoryOptions) (
 	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getTransactionHistory", nil, params)
 }
 
+// Returns the user sales history on the site
 func (c *Client) SalesHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
 	if opts != nil {
@@ -318,6 +360,7 @@ func (c *Client) SalesHistory(ctx context.Context, opts *HistoryOptions) (Invent
 	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getSalesHistory", nil, params)
 }
 
+// Returns the user purchase history on the site
 func (c *Client) PurchaseHistory(ctx context.Context, opts *HistoryOptions) (InventoryPayload, error) {
 	params := url.Values{}
 	if opts != nil {
@@ -331,10 +374,12 @@ func (c *Client) PurchaseHistory(ctx context.Context, opts *HistoryOptions) (Inv
 	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getPurchaseHistory", nil, params)
 }
 
+// Gets item pricing data for a specific item ID
 func (c *Client) ItemPricing(ctx context.Context, itemID int) (PriceItem, error) {
 	return executeRequest[PriceItem](ctx, c, "GET", "item/pricing/"+strconv.Itoa(itemID), nil, nil)
 }
 
+// Performs ItemPricing() but on up to 100 itemIDs
 func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricingPayload, error) {
 	if len(itemIDs) > 100 {
 		return BulkPricingPayload{}, fmt.Errorf("the pricing bulk endpoint has a limit of 100 ids")
@@ -348,6 +393,7 @@ func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricin
 	return executeRequest[BulkPricingPayload](ctx, c, "GET", "item/pricing/bulk", nil, params)
 }
 
+// Creates a buy order for a specific item ID at a given price
 func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) error {
 	payload := buyOrderRequest{
 		ItemID: itemID,
@@ -362,6 +408,7 @@ func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) 
 	return err
 }
 
+// Returns sales history for a given item ID over some period
 func (c *Client) ItemSalesGraph(ctx context.Context, itemID int, period Period) (PriceHistoryPayload, error) {
 	if period == "" {
 		period = Period1Month
@@ -371,6 +418,7 @@ func (c *Client) ItemSalesGraph(ctx context.Context, itemID int, period Period) 
 	return executeRequest[PriceHistoryPayload](ctx, c, "GET", "item/salesGraph/"+strconv.Itoa(itemID), nil, params)
 }
 
+// Returns the active listings (with optional filtering) for a given item ID
 func (c *Client) ItemListings(ctx context.Context, itemID int, userID string, opts *ListingOptions) (ListingPayload, error) {
 	endpoint := "item/listing/" + strconv.Itoa(itemID)
 	if userID != "" {
@@ -393,19 +441,7 @@ func (c *Client) ItemListings(ctx context.Context, itemID int, userID string, op
 	return executeRequest[ListingPayload](ctx, c, "GET", endpoint, nil, params)
 }
 
+// Gets the active buy orders for an item ID
 func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
 	return executeRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
-}
-
-func (c *Client) SetBaseURL(url string) {
-	c.mu.Lock()
-	c.baseURL = url
-	c.mu.Unlock()
-}
-
-func (c *Client) GetBaseURL() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.baseURL
-
 }
