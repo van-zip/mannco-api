@@ -398,7 +398,9 @@ func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload,
 }
 
 func (c *Client) SetBaseURL(url string) {
+	c.mu.Lock()
 	c.baseURL = url
+	c.mu.Unlock()
 }
 
 func (c *Client) GetBaseURL() string {
