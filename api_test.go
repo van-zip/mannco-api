@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
@@ -124,6 +125,55 @@ func TestBalance(t *testing.T) {
 			assertError: func(t *testing.T, err error) {
 				if err == nil {
 					t.Fatal("expected server error registration but received nil")
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		runAPITest(t, tc)
+	}
+}
+
+// func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
+func TestBuyOrderList(t *testing.T) {
+	tests := []testCase[BuyOrderPayload]{
+		{
+			name:       "Successful Buy Order Retrieval",
+			mockStatus: http.StatusOK,
+			mockResponse: `{
+  "err": false,
+  "success": true,
+  "content": {
+    "informations": {
+      "0": { "count": 3, "price": 1456 },
+      "1": { "count": 5, "price": 1404 },
+      "2": { "count": 2, "price": 1403 },
+      "3": { "count": 2, "price": 1401 },
+      "4": { "count": 1, "price": 1400 },
+      "more": { "count": 213, "price": 1392 }
+    }
+  }
+}`,
+			expectedPath:   "/item/buyorderList/958",
+			expectedMethod: http.MethodGet,
+			runTest: func(ctx context.Context, client *Client) (BuyOrderPayload, error) {
+				return client.BuyOrderList(ctx, 958)
+			},
+			assertResponse: func(t *testing.T, got BuyOrderPayload) {
+				expected := BuyOrderPayload{
+					Informations: map[string]BuyOrderInfo{
+						"0":    {Count: 3, Price: 1456},
+						"1":    {Count: 5, Price: 1404},
+						"2":    {Count: 2, Price: 1403},
+						"3":    {Count: 2, Price: 1401},
+						"4":    {Count: 1, Price: 1400},
+						"more": {Count: 213, Price: 1392},
+					},
+				}
+
+				if !reflect.DeepEqual(got, expected) {
+					t.Errorf("BuyOrderList() got = %+v, want %+v", got, expected)
 				}
 			},
 		},

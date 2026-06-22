@@ -139,7 +139,7 @@ type BuyOrderInfo struct {
 }
 
 type BuyOrderPayload struct {
-	BuyOrders map[string]BuyOrderInfo `json:"informations"`
+	Informations map[string]BuyOrderInfo `json:"informations"`
 }
 
 type buyOrderRequest struct {
