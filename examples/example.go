@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/van-zip/mannco-api"
+	"github.com/van-zip/mannco-go"
 	"log"
 	"net/http"
 	"time"
@@ -20,7 +20,7 @@ func main() {
 	}
 
 	// instantiate your  API client
-	client := api.NewClient("", customHTTPClient)
+	client := mannco.NewClient("", customHTTPClient)
 
 	// fetch your auth token
 	fmt.Println("--- Fetching JWT ---")

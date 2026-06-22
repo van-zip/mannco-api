@@ -1,6 +1,6 @@
 //go:build integration
 
-package api_test
+package mannco_test
 
 import (
 	"context"
