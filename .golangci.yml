@@ -1,0 +1,102 @@
+version: "2"
+
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+  sort-order:
+    - linter
+    - severity
+    - file
+
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+  
+  staticcheck:
+    checks: ["all"]
+
+  revive:
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+
+
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/van-zip/mannco-go)
+
+  gocyclo:
+    min-complexity: 15
+
+  mnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - gosec
+    - bodyclose
+    - sqlclosecheck
+    - revive
+    - gocyclo
+    - unparam
+    - wastedassign
+    - nakedret
+
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0
+  
+  exclusions:
+    generated: lax
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - mnd
+          - errcheck
