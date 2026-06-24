@@ -1,3 +1,4 @@
+// Package main is a simple example of utilizing mannco-go
 package main
 
 import (
