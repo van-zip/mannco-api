@@ -34,7 +34,8 @@ func runAPITest[T any](t *testing.T, tc testCase[T]) {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(tc.mockStatus)
-			w.Write([]byte(tc.mockResponse))
+			// this failing shouldn't matter for a test suite
+			_, _ = w.Write([]byte(tc.mockResponse))
 		}))
 		defer server.Close()
 
