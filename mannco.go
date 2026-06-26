@@ -185,6 +185,7 @@ type BuyOrderPayload struct {
 	BuyOrders []BuyOrderInfo
 }
 
+// UnmarshalJSON handles the inconsistently shaped responses from the upstream API
 func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
 	// Unwraps to just the Informations entry
 	var envelope struct {
