@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +55,15 @@ type APIError struct {
 func (e *APIError) Error() string {
 	return fmt.Sprintf("server error with status code %d: %s", e.StatusCode, e.Message)
 }
+
+var (
+	// ErrUnauthorized indicates either insufficient permissions or expired authentication
+	ErrUnauthorized = errors.New("authentication error")
+	// ErrNetwork is any network related failure
+	ErrNetwork = errors.New("network error")
+	// ErrInternal is any error derived from internal package logic
+	ErrInternal = errors.New("internal error")
+)
 
 // A PriceHistoryPoint is a specific data point from the price history of an item
 type PriceHistoryPoint struct {
@@ -160,15 +171,77 @@ type ListingPayload struct {
 	Values []Listing `json:"values"`
 }
 
-// BuyOrderInfo is a specific buy order offer
+// buyOrderArrayShape is an internal type to unwrap the response
+type buyOrderArrayShape []BuyOrderInfo
+
+// BuyOrderInfo is a specific buy order
 type BuyOrderInfo struct {
 	Count int `json:"count"`
 	Price int `json:"price"`
 }
 
-// BuyOrderPayload is the payload returned by BuyOrderList
+// BuyOrderPayload is the returned payload from the API
 type BuyOrderPayload struct {
-	Informations map[string]BuyOrderInfo `json:"informations"`
+	BuyOrders []BuyOrderInfo
+}
+
+func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
+	// Unwraps to just the Informations entry
+	var envelope struct {
+		Informations json.RawMessage `json:"informations"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return err
+	}
+
+	raw := bytes.TrimSpace(envelope.Informations)
+	if len(raw) == 0 {
+		// No buy orders
+		return nil
+	}
+
+	// The upstream API either returns a JSON map using 'tiers' or just an array
+	// Handle the array
+	if raw[0] == '[' {
+		var arr []BuyOrderInfo
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			return err
+		}
+		b.BuyOrders = arr
+		return nil
+	}
+
+	// Handle the map
+	var obj map[string]BuyOrderInfo
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return err
+	}
+
+	var more *BuyOrderInfo
+	keys := make([]int, 0, len(obj))
+	for k := range obj {
+		if k == "more" {
+			v := obj[k]
+			more = &v
+			continue
+		}
+		n, err := strconv.Atoi(k)
+		if err != nil {
+			return fmt.Errorf("unexpected non-numeric, non-'more' key %q in informations object", k)
+		}
+		keys = append(keys, n)
+	}
+	sort.Ints(keys)
+
+	result := make([]BuyOrderInfo, 0, len(keys)+1)
+	for _, k := range keys {
+		result = append(result, obj[strconv.Itoa(k)])
+	}
+	if more != nil {
+		result = append(result, *more)
+	}
+	b.BuyOrders = result
+	return nil
 }
 
 // buyOrderRequest represents to build a buy order request
@@ -254,7 +327,7 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 
 	u, err := url.Parse(c.GetBaseURL() + endpoint)
 	if err != nil {
-		return target, fmt.Errorf("invalid endpoint url: %w", err)
+		return target, fmt.Errorf("%w: invalid endpoint url: %w", ErrInternal, err)
 	}
 	if queryParams != nil {
 		u.RawQuery = queryParams.Encode()
@@ -267,26 +340,24 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), reqBody)
 	if err != nil {
-		return target, fmt.Errorf("failed to construct request object: %w", err)
+		return target, fmt.Errorf("%w: failed to construct request object: %w", ErrInternal, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	if jwt := c.GetJWT(); jwt != "" {
 		req.Header.Set("Authorization", "Bearer "+jwt)
 	}
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return target, fmt.Errorf("network call execution failed: %w", err)
+		return target, fmt.Errorf("%w: request execution failed: %w", ErrNetwork, err)
 	}
+
 	defer func() {
-		if err = resp.Body.Close(); err != nil {
-			fmt.Printf("Failed to close response body, this is not usually an issue")
-		}
+		_ = resp.Body.Close()
 	}()
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return target, fmt.Errorf("failed reading raw response bytes: %w", err)
+		return target, fmt.Errorf("%w: failed reading raw response bytes: %w", ErrNetwork, &APIError{StatusCode: resp.StatusCode, Message: err.Error()})
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -295,21 +366,20 @@ func executeRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 		if json.Unmarshal(bodyBytes, &apiErr) == nil {
 			msg = apiErr.Message
 		}
-		return target, &APIError{StatusCode: resp.StatusCode, Message: msg}
+		httpErr := &APIError{StatusCode: resp.StatusCode, Message: msg}
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return target, fmt.Errorf("%w: %w", ErrUnauthorized, httpErr)
+		}
+		return target, httpErr
 	}
-
 	var apiResponse APIResponse[T]
 	if err = json.Unmarshal(bodyBytes, &apiResponse); err != nil {
-		return target, fmt.Errorf("failed decoding response JSON: %w", err)
+		return target, fmt.Errorf("%w: failed decoding response JSON: %w", ErrInternal, &APIError{StatusCode: resp.StatusCode, Message: err.Error()})
 	}
 
 	if apiResponse.Err || !apiResponse.Success {
-		if apiResponse.Message != "" {
-			return target, fmt.Errorf("api error: %s", apiResponse.Message)
-		}
-		return target, fmt.Errorf("api returned a failure state")
+		return target, &APIError{StatusCode: resp.StatusCode, Message: apiResponse.Message}
 	}
-
 	return apiResponse.Content, nil
 }
 
@@ -402,7 +472,7 @@ const maxIDs = 100
 // ItemPricingBulk performs ItemPricing() but on up to 100 itemIDs
 func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricingPayload, error) {
 	if len(itemIDs) > maxIDs {
-		return BulkPricingPayload{}, fmt.Errorf("the pricing bulk endpoint has a limit of 100 ids")
+		return BulkPricingPayload{}, fmt.Errorf("%w: the pricing bulk endpoint has a limit of 100 ids", ErrInternal)
 	}
 	idStrings := make([]string, len(itemIDs))
 	for i, id := range itemIDs {
