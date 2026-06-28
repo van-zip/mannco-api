@@ -96,7 +96,7 @@ func (c *Client) GetBaseURL() string {
 
 }
 
-// ExecuteRequest performs generic parsing, safety handling, and raw IO operations for interactinng with the API
+// ExecuteRequest performs generic parsing, safety handling, and raw IO operations for interacting with the API
 func ExecuteRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
@@ -145,7 +145,7 @@ func ExecuteRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return target, fmt.Errorf("%w: %w", ErrUnauthorized, httpErr)
 		}
-		return target, httpErr
+		return target, fmt.Errorf("%w: %w", ErrInternal, httpErr)
 	}
 	var apiResponse APIResponse[T]
 	if err = json.Unmarshal(bodyBytes, &apiResponse); err != nil {
@@ -153,7 +153,7 @@ func ExecuteRequest[T any](ctx context.Context, c *Client, method, endpoint stri
 	}
 
 	if apiResponse.Err || !apiResponse.Success {
-		return target, &APIError{StatusCode: resp.StatusCode, Message: apiResponse.Message}
+		return target, fmt.Errorf("%w: %w", ErrInternal, &APIError{StatusCode: resp.StatusCode, Message: apiResponse.Message})
 	}
 	return apiResponse.Content, nil
 }
