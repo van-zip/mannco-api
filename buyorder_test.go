@@ -105,7 +105,7 @@ func TestCreateBuyOrder(t *testing.T) {
 		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
 			return nil, client.CreateBuyOrder(ctx, 958, 1000, 5)
 		},
-		assertResponse: func(t *testing.T, res json.RawMessage) {},
+		assertResponse: func(_ *testing.T, _ json.RawMessage) {},
 	})
 
 	runAPITest(t, testCase[json.RawMessage]{
