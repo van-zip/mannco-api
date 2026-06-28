@@ -147,7 +147,7 @@ type ListingOptions struct {
 
 // ItemPricing gets item pricing data for a specific item ID
 func (c *Client) ItemPricing(ctx context.Context, itemID int) (PriceItem, error) {
-	return ExecuteRequest[PriceItem](ctx, c, "GET", "item/pricing/"+strconv.Itoa(itemID), nil, nil)
+	return executeRequest[PriceItem](ctx, c, "GET", "item/pricing/"+strconv.Itoa(itemID), nil, nil)
 }
 
 // ItemPricingBulk performs ItemPricing() but on up to 100 itemIDs
@@ -161,7 +161,7 @@ func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricin
 	}
 	params := url.Values{}
 	params.Add("items", strings.Join(idStrings, ","))
-	return ExecuteRequest[BulkPricingPayload](ctx, c, "GET", "item/pricing/bulk", nil, params)
+	return executeRequest[BulkPricingPayload](ctx, c, "GET", "item/pricing/bulk", nil, params)
 }
 
 // ItemSalesGraph returns sales history for a given item ID over some period
@@ -171,7 +171,7 @@ func (c *Client) ItemSalesGraph(ctx context.Context, itemID int, period Period) 
 	}
 	params := url.Values{}
 	params.Add("period", string(period))
-	return ExecuteRequest[PriceHistoryPayload](ctx, c, "GET", "item/salesGraph/"+strconv.Itoa(itemID), nil, params)
+	return executeRequest[PriceHistoryPayload](ctx, c, "GET", "item/salesGraph/"+strconv.Itoa(itemID), nil, params)
 }
 
 // ItemListings returns the active listings (with optional filtering) for a given item ID
@@ -194,5 +194,5 @@ func (c *Client) ItemListings(ctx context.Context, itemID int, userID string, op
 		}
 	}
 
-	return ExecuteRequest[ListingPayload](ctx, c, "GET", endpoint, nil, params)
+	return executeRequest[ListingPayload](ctx, c, "GET", endpoint, nil, params)
 }

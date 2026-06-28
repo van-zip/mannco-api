@@ -89,7 +89,7 @@ type buyOrderRequest struct {
 
 // BuyOrderList gets the active buy orders for an item ID
 func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
-	return ExecuteRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
+	return executeRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
 }
 
 // CreateBuyOrder creates a buy order for a specific item ID at a given price
@@ -103,6 +103,6 @@ func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) 
 	if err != nil {
 		return fmt.Errorf("error encoding json for creating buy order: %w", err)
 	}
-	_, err = ExecuteRequest[json.RawMessage](ctx, c, "POST", "item/buyorder", jsonData, nil)
+	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder", jsonData, nil)
 	return err
 }

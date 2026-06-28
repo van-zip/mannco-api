@@ -16,7 +16,7 @@ func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 		return "", fmt.Errorf("error encoding json for user login: %w", err)
 	}
 
-	content, err := ExecuteRequest[LoginPayload](ctx, c, "POST", "user/login", jsonData, nil)
+	content, err := executeRequest[LoginPayload](ctx, c, "POST", "user/login", jsonData, nil)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +28,7 @@ func (c *Client) UserLogin(ctx context.Context, apiKey string) (string, error) {
 
 // Balance returns the user balance in pennies
 func (c *Client) Balance(ctx context.Context) (int, error) {
-	content, err := ExecuteRequest[BalancePayload](ctx, c, "GET", "user/balance", nil, nil)
+	content, err := executeRequest[BalancePayload](ctx, c, "GET", "user/balance", nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -46,7 +46,7 @@ func (c *Client) TransactionHistory(ctx context.Context, opts *HistoryOptions) (
 			params.Add("limit", strconv.Itoa(opts.Limit))
 		}
 	}
-	return ExecuteRequest[InventoryPayload](ctx, c, "GET", "user/getTransactionHistory", nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getTransactionHistory", nil, params)
 }
 
 // SalesHistory returns the user sales history on the site
@@ -66,7 +66,7 @@ func (c *Client) SalesHistory(ctx context.Context, opts *HistoryOptions) (Invent
 			params.Add("search", opts.Search)
 		}
 	}
-	return ExecuteRequest[InventoryPayload](ctx, c, "GET", "user/getSalesHistory", nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getSalesHistory", nil, params)
 }
 
 // PurchaseHistory returns the user purchase history on the site
@@ -80,5 +80,5 @@ func (c *Client) PurchaseHistory(ctx context.Context, opts *HistoryOptions) (Inv
 			params.Add("count", strconv.Itoa(opts.Limit))
 		}
 	}
-	return ExecuteRequest[InventoryPayload](ctx, c, "GET", "user/getPurchaseHistory", nil, params)
+	return executeRequest[InventoryPayload](ctx, c, "GET", "user/getPurchaseHistory", nil, params)
 }
