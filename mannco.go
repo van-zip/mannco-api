@@ -96,8 +96,8 @@ func (c *Client) GetBaseURL() string {
 
 }
 
-// ExecuteRequest performs generic parsing, safety handling, and raw IO operations for interacting with the API
-func ExecuteRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
+// executeRequest performs generic parsing, safety handling, and raw IO operations for interacting with the API
+func executeRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
 	u, err := url.Parse(c.GetBaseURL() + endpoint)
