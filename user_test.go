@@ -117,7 +117,7 @@ func TestSalesHistory(t *testing.T) {
 		runTest: func(ctx context.Context, client *Client) (InventoryPayload, error) {
 			return client.SalesHistory(ctx, &HistoryOptions{Page: 1, Limit: 5, Period: Period3Months, Search: "test"})
 		},
-		assertResponse: func(t *testing.T, res InventoryPayload) {},
+		assertResponse: func(_ *testing.T, _ InventoryPayload) {},
 	})
 }
 
@@ -131,6 +131,6 @@ func TestPurchaseHistory(t *testing.T) {
 		runTest: func(ctx context.Context, client *Client) (InventoryPayload, error) {
 			return client.PurchaseHistory(ctx, &HistoryOptions{Page: 1, Limit: 10})
 		},
-		assertResponse: func(t *testing.T, res InventoryPayload) {},
+		assertResponse: func(_ *testing.T, _ InventoryPayload) {},
 	})
 }

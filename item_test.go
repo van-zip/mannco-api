@@ -124,7 +124,7 @@ func TestItemListings(t *testing.T) {
 		runTest: func(ctx context.Context, client *Client) (ListingPayload, error) {
 			return client.ItemListings(ctx, 440, "user123", nil)
 		},
-		assertResponse: func(t *testing.T, res ListingPayload) {},
+		assertResponse: func(_ *testing.T, _ ListingPayload) {},
 	})
 
 	runAPITest(t, testCase[ListingPayload]{
@@ -136,7 +136,7 @@ func TestItemListings(t *testing.T) {
 		runTest: func(ctx context.Context, client *Client) (ListingPayload, error) {
 			return client.ItemListings(ctx, 440, "", &ListingOptions{Count: 10, Page: 2, Game: 440})
 		},
-		assertResponse: func(t *testing.T, res ListingPayload) {},
+		assertResponse: func(_ *testing.T, _ ListingPayload) {},
 	})
 }
 
