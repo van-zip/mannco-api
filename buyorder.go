@@ -31,7 +31,7 @@ func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
 	}
 
 	raw := bytes.TrimSpace(envelope.Informations)
-	if len(raw) == 0 {
+	if len(raw) == 0 || string(raw) == "null" {
 		// No buy orders
 		return nil
 	}
