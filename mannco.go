@@ -17,9 +17,6 @@ import (
 // BaseURL is the default base URL for the mannco.store api
 const BaseURL = "https://api.mannco.store/"
 
-/*
-	Datatypes
-*/
 // APIResponse is the general shape of Mannco.store API responses
 type APIResponse[T any] struct {
 	Err     bool   `json:"err"`
@@ -99,7 +96,7 @@ func (c *Client) GetBaseURL() string {
 
 }
 
-// executeRequest performs generic parsing, safety handling, and raw IO operations for interactinng with the API
+// ExecuteRequest performs generic parsing, safety handling, and raw IO operations for interactinng with the API
 func ExecuteRequest[T any](ctx context.Context, c *Client, method, endpoint string, body []byte, queryParams url.Values) (T, error) {
 	var target T
 
