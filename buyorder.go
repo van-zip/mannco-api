@@ -170,3 +170,29 @@ func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) 
 func (c *Client) UserItemBuyOrder(ctx context.Context, itemID int) (UserItemBuyOrderPayload, error) {
 	return executeRequest[UserItemBuyOrderPayload](ctx, c, "GET", "user/buyorder/"+strconv.Itoa(itemID), nil, nil)
 }
+
+// GetUserBuyOrders gets all the logged in user's buy orders
+func (c *Client) GetUserBuyOrders(ctx context.Context) (UserBuyOrdersPayload, error) {
+	return executeRequest[UserBuyOrdersPayload](ctx, c, "GET", "user/buyorders", nil, nil)
+}
+
+// UserBuyOrdersPayload is the payload returned by GetUserBuyOrders
+type UserBuyOrdersPayload struct {
+	Values []UserBuyOrderItem `json:"values"`
+	Count  BuyOrderCount      `json:"count"`
+}
+
+// UserBuyOrderItem represents a buy order in the user's buy orders list
+type UserBuyOrderItem struct {
+	ID        int    `json:"id"`
+	ItemID    int    `json:"itemid"`
+	Price     int    `json:"price"`
+	Amount    int    `json:"amount"`
+	Name      string `json:"name"`
+	Game      int    `json:"game"`
+}
+
+// BuyOrderCount contains the total count of buy orders
+type BuyOrderCount struct {
+	Nb int `json:"nb"`
+}

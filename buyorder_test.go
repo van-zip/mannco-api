@@ -298,3 +298,42 @@ func TestUserItemBuyOrder(t *testing.T) {
 		},
 	})
 }
+
+func TestGetUserBuyOrders(t *testing.T) {
+	runAPITest(t, testCase[UserBuyOrdersPayload]{
+		name:           "GetUserBuyOrders_success",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"values":[{"id":98765,"itemid":12345,"price":15000,"amount":3,"name":"Burning Flames Team Captain","game":440}],"count":{"nb":15}}}`,
+		expectedPath:   "/user/buyorders",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (UserBuyOrdersPayload, error) {
+			return client.GetUserBuyOrders(ctx)
+		},
+		assertResponse: func(t *testing.T, res UserBuyOrdersPayload) {
+			if len(res.Values) != 1 {
+				t.Errorf("expected 1 buy order, got %d", len(res.Values))
+			}
+			if res.Values[0].ID != 98765 {
+				t.Errorf("expected id 98765, got %d", res.Values[0].ID)
+			}
+			if res.Values[0].ItemID != 12345 {
+				t.Errorf("expected itemid 12345, got %d", res.Values[0].ItemID)
+			}
+			if res.Values[0].Price != 15000 {
+				t.Errorf("expected price 15000, got %d", res.Values[0].Price)
+			}
+			if res.Values[0].Amount != 3 {
+				t.Errorf("expected amount 3, got %d", res.Values[0].Amount)
+			}
+			if res.Values[0].Name != "Burning Flames Team Captain" {
+				t.Errorf("expected name 'Burning Flames Team Captain', got %q", res.Values[0].Name)
+			}
+			if res.Values[0].Game != 440 {
+				t.Errorf("expected game 440, got %d", res.Values[0].Game)
+			}
+			if res.Count.Nb != 15 {
+				t.Errorf("expected count 15, got %d", res.Count.Nb)
+			}
+		},
+	})
+}
