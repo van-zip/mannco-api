@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -26,13 +26,10 @@ type UserItemBuyOrderPayload struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// ErrNoInformations is returned when the API response is missing the 'informations' envelope
-var ErrNoInformations = errors.New("missing 'informations' envelope in API response")
-
 // unwrapEnvelope extracts the raw JSON for the given key from an API response envelope.
 // Returns the raw JSON message.
 // If the envelope key exists but is null/empty/empty-object, returns empty RawMessage with no error (valid empty response).
-// If the envelope key is missing entirely, returns ErrNoInformations.
+// If the envelope key is missing entirely, returns ErrInternal (invalid/unexpected API response).
 func unwrapEnvelope(data []byte, key string) (json.RawMessage, error) {
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(data, &envelope); err != nil {
@@ -42,7 +39,7 @@ func unwrapEnvelope(data []byte, key string) (json.RawMessage, error) {
 	raw, ok := envelope[key]
 	if !ok {
 		// Key is missing entirely - this is an invalid/unexpected API response
-		return nil, ErrNoInformations
+		return nil, fmt.Errorf("%w: missing '%s' envelope in API response", ErrInternal, key)
 	}
 
 	// Key exists but is null, empty, or empty object - valid empty response
@@ -112,7 +109,11 @@ func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		// If there's no envelope, try direct unmarshal (for backward compatibility / tests)
 		// but only if the error is specifically about missing envelope
-		if errors.Is(err, ErrNoInformations) {
+		msg := err.Error()
+		isMissingEnvelope := strings.HasPrefix(msg, "internal error: missing '") &&
+			strings.Contains(msg, envelopeKeyInformations) &&
+			strings.HasSuffix(msg, " envelope in API response")
+		if isMissingEnvelope {
 			// Allow empty array or null at top level for tests
 			if len(bytes.TrimSpace(data)) == 0 || string(bytes.TrimSpace(data)) == "null" {
 				return nil

@@ -273,13 +273,17 @@ func TestBuyOrderPayloadUnmarshalJSON(t *testing.T) {
 
 	t.Run("missing_informations_envelope", func(t *testing.T) {
 		var payload BuyOrderPayload
-		// Missing 'informations' key entirely - should return ErrNoInformations
+		// Missing 'informations' key entirely - should return wrapped ErrInternal
 		err := json.Unmarshal([]byte(`{"other_key": "value"}`), &payload)
 		if err == nil {
 			t.Fatal("expected error for missing informations envelope, got nil")
 		}
-		if !errors.Is(err, ErrNoInformations) {
-			t.Errorf("expected ErrNoInformations, got %v", err)
+		// Check that it's a wrapped ErrInternal error
+		if !errors.Is(err, ErrInternal) {
+			t.Errorf("expected ErrInternal, got %T: %v", err, err)
+		}
+		if !strings.Contains(err.Error(), "missing 'informations' envelope") {
+			t.Errorf("expected missing envelope message, got %v", err)
 		}
 	})
 }
