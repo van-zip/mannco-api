@@ -2,6 +2,9 @@ package mannco
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -137,6 +140,152 @@ func TestItemListings(t *testing.T) {
 			return client.ItemListings(ctx, 440, "", &ListingOptions{Count: 10, Page: 2, Game: 440})
 		},
 		assertResponse: func(_ *testing.T, _ ListingPayload) {},
+	})
+}
+
+func TestItemSalesGraphErrorPaths(t *testing.T) {
+	// Test server error (500)
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_server_error",
+		mockStatus:     500,
+		mockResponse:   `{"err":true,"success":false,"message":"Internal server error","content":null}`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 440, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("expected *APIError, got %T: %v", err, err)
+			}
+			if apiErr.StatusCode != http.StatusInternalServerError {
+				t.Errorf("expected status 500, got %d", apiErr.StatusCode)
+			}
+		},
+	})
+
+	// Test not found (404)
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_not_found",
+		mockStatus:     404,
+		mockResponse:   `{"err":true,"success":false,"message":"Item not found","content":null}`,
+		expectedPath:   "/item/salesGraph/999",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 999, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("expected *APIError, got %T: %v", err, err)
+			}
+			if apiErr.StatusCode != http.StatusNotFound {
+				t.Errorf("expected status 404, got %d", apiErr.StatusCode)
+			}
+		},
+	})
+
+	// Test unauthorized (401)
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_unauthorized",
+		mockStatus:     401,
+		mockResponse:   `{"err":true,"success":false,"message":"Unauthorized","content":null}`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 440, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, ErrUnauthorized) {
+				t.Errorf("expected ErrUnauthorized, got %v", err)
+			}
+		},
+	})
+
+	// Test malformed JSON response
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_malformed_response",
+		mockStatus:     200,
+		mockResponse:   `not valid json`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 440, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected JSON decode error, got nil")
+			}
+			if !strings.Contains(err.Error(), "failed decoding response JSON") {
+				t.Errorf("expected JSON decode error, got %v", err)
+			}
+		},
+	})
+
+	// Test API response with err=true
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_api_err_true",
+		mockStatus:     200,
+		mockResponse:   `{"err":true,"success":false,"message":"API error","content":null}`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 440, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "API error") {
+				t.Errorf("expected API error message, got %v", err)
+			}
+		},
+	})
+
+	// Test API response with success=false
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_api_success_false",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":false,"message":"Operation failed","content":null}`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			return client.ItemSalesGraph(ctx, 440, Period1Month)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "Operation failed") {
+				t.Errorf("expected operation failed message, got %v", err)
+			}
+		},
+	})
+}
+
+func TestItemSalesGraphDefaultPeriod(t *testing.T) {
+	// Test that empty period defaults to Period1Month
+	runAPITest(t, testCase[PriceHistoryPayload]{
+		name:           "ItemSalesGraph_default_period",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"message":"","content":{"values":[]}}`,
+		expectedPath:   "/item/salesGraph/440",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (PriceHistoryPayload, error) {
+			// Pass empty period to test default
+			return client.ItemSalesGraph(ctx, 440, "")
+		},
+		assertResponse: func(_ *testing.T, _ PriceHistoryPayload) {},
 	})
 }
 

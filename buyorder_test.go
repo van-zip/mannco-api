@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -171,6 +173,147 @@ func TestCreateBuyOrder(t *testing.T) {
 				t.Errorf("expected unauthorized error, got: %v", err)
 			}
 		},
+	})
+}
+
+func TestCreateBuyOrderErrorPaths(t *testing.T) {
+	// Test server error (500)
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "CreateBuyOrder_server_error",
+		mockStatus:     500,
+		mockResponse:   `{"err":true,"success":false,"message":"Internal server error","content":null}`,
+		expectedPath:   "/item/buyorder",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.CreateBuyOrder(ctx, 958, 1000, 5)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("expected *APIError, got %T: %v", err, err)
+			}
+			if apiErr.StatusCode != http.StatusInternalServerError {
+				t.Errorf("expected status 500, got %d", apiErr.StatusCode)
+			}
+		},
+	})
+
+	// Test not found (404)
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "CreateBuyOrder_not_found",
+		mockStatus:     404,
+		mockResponse:   `{"err":true,"success":false,"message":"Item not found","content":null}`,
+		expectedPath:   "/item/buyorder",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.CreateBuyOrder(ctx, 999999, 1000, 5)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("expected *APIError, got %T: %v", err, err)
+			}
+			if apiErr.StatusCode != http.StatusNotFound {
+				t.Errorf("expected status 404, got %d", apiErr.StatusCode)
+			}
+		},
+	})
+
+	// Test malformed JSON response
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "CreateBuyOrder_malformed_response",
+		mockStatus:     200,
+		mockResponse:   `not valid json`,
+		expectedPath:   "/item/buyorder",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.CreateBuyOrder(ctx, 958, 1000, 5)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected JSON decode error, got nil")
+			}
+			if !strings.Contains(err.Error(), "failed decoding response JSON") {
+				t.Errorf("expected JSON decode error, got %v", err)
+			}
+		},
+	})
+}
+
+func TestBuyOrderPayloadUnmarshalJSON(t *testing.T) {
+	t.Run("empty_null_informations", func(t *testing.T) {
+		var payload BuyOrderPayload
+		err := json.Unmarshal([]byte(`{"informations":null}`), &payload)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if payload.BuyOrders != nil {
+			t.Errorf("expected nil BuyOrders, got %v", payload.BuyOrders)
+		}
+	})
+
+	t.Run("empty_object_informations", func(t *testing.T) {
+		var payload BuyOrderPayload
+		err := json.Unmarshal([]byte(`{"informations":{}}`), &payload)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(payload.BuyOrders) != 0 {
+			t.Errorf("expected empty BuyOrders, got %d", len(payload.BuyOrders))
+		}
+	})
+
+	t.Run("empty_string_informations", func(t *testing.T) {
+		var payload BuyOrderPayload
+		// Empty string for informations is not a valid type, but we test the error path
+		err := json.Unmarshal([]byte(`{"informations":""}`), &payload)
+		if err == nil {
+			t.Fatal("expected error for string informations, got nil")
+		}
+		// Should fail because string cannot unmarshal into map
+	})
+
+	t.Run("invalid_json_envelope", func(t *testing.T) {
+		var payload BuyOrderPayload
+		err := json.Unmarshal([]byte(`not valid json`), &payload)
+		if err == nil {
+			t.Fatal("expected error for invalid JSON, got nil")
+		}
+	})
+
+	t.Run("array_with_invalid_element", func(t *testing.T) {
+		var payload BuyOrderPayload
+		// Test with an element that has wrong type for count (string instead of int)
+		err := json.Unmarshal([]byte(`{"informations":[{"count":"not_int","price":100}]}`), &payload)
+		if err == nil {
+			t.Fatal("expected error for invalid count type, got nil")
+		}
+	})
+
+	t.Run("map_with_non_numeric_key", func(t *testing.T) {
+		var payload BuyOrderPayload
+		err := json.Unmarshal([]byte(`{"informations":{"invalid_key":{"count":1,"price":100}}}`), &payload)
+		if err == nil {
+			t.Fatal("expected error for non-numeric key, got nil")
+		}
+		if !strings.Contains(err.Error(), "unexpected non-numeric") {
+			t.Errorf("expected non-numeric key error, got %v", err)
+		}
+	})
+
+	t.Run("map_unmarshal_error", func(t *testing.T) {
+		var payload BuyOrderPayload
+		// This has a valid structure but invalid type for price (string instead of int)
+		err := json.Unmarshal([]byte(`{"informations":{"0":{"count":1,"price":"not_a_number"}}}`), &payload)
+		if err == nil {
+			t.Fatal("expected error for invalid price type, got nil")
+		}
 	})
 }
 
