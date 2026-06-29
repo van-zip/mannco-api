@@ -9,36 +9,82 @@ import (
 
 func TestBuyOrderList(t *testing.T) {
 	runAPITest(t, testCase[BuyOrderPayload]{
-		name:           "BuyOrderList_success_array",
-		mockStatus:     200,
-		mockResponse:   `{"err":false,"success":true,"message":"","content":{"informations":[{"count":5,"price":1000},{"count":3,"price":2000}]}}`,
-		expectedPath:   "/item/buyorderList/958",
+		name:       "BuyOrderList_success_array",
+		mockStatus: 200,
+		mockResponse: `{
+  "err": false,
+  "success": true,
+  "content": {
+    "informations": [
+      {
+        "count": 1,
+        "price": 191200
+      },
+      {
+        "count": 1,
+        "price": 191000
+      }
+    ]
+  }
+}`,
+		expectedPath:   "/item/buyorderList/174119",
 		expectedMethod: "GET",
 		runTest: func(ctx context.Context, client *Client) (BuyOrderPayload, error) {
-			return client.BuyOrderList(ctx, 958)
+			return client.BuyOrderList(ctx, 174119)
 		},
 		assertResponse: func(t *testing.T, res BuyOrderPayload) {
 			if len(res.BuyOrders) != 2 {
 				t.Errorf("expected 2 buy orders, got %d", len(res.BuyOrders))
 			}
-			if res.BuyOrders[0].Count != 5 || res.BuyOrders[0].Price != 1000 {
-				t.Errorf("expected first order count=5 price=1000, got count=%d price=%d", res.BuyOrders[0].Count, res.BuyOrders[0].Price)
+			if res.BuyOrders[0].Count != 1 || res.BuyOrders[0].Price != 191200 {
+				t.Errorf("expected first order count=1 price=191200, got count=%d price=%d", res.BuyOrders[0].Count, res.BuyOrders[0].Price)
 			}
 		},
 	})
 
 	runAPITest(t, testCase[BuyOrderPayload]{
-		name:           "BuyOrderList_success_object_with_more",
-		mockStatus:     200,
-		mockResponse:   `{"err":false,"success":true,"message":"","content":{"informations":{"1":{"count":10,"price":500},"2":{"count":5,"price":1000},"more":{"count":1,"price":2000}}}}`,
-		expectedPath:   "/item/buyorderList/958",
+		name:       "BuyOrderList_success_object_with_more",
+		mockStatus: 200,
+		mockResponse: `{
+  "err": false,
+  "success": true,
+  "content": {
+    "informations": {
+      "0": {
+        "count": 1,
+        "price": 4153
+      },
+      "1": {
+        "count": 5,
+        "price": 4150
+      },
+      "2": {
+        "count": 2,
+        "price": 4000
+      },
+      "3": {
+        "count": 1,
+        "price": 3720
+      },
+      "4": {
+        "count": 1,
+        "price": 3687
+      },
+      "more": {
+        "count": 125,
+        "price": 3524
+      }
+    }
+  }
+}`,
+		expectedPath:   "/item/buyorderList/371",
 		expectedMethod: "GET",
 		runTest: func(ctx context.Context, client *Client) (BuyOrderPayload, error) {
-			return client.BuyOrderList(ctx, 958)
+			return client.BuyOrderList(ctx, 371)
 		},
 		assertResponse: func(t *testing.T, res BuyOrderPayload) {
-			if len(res.BuyOrders) != 3 {
-				t.Errorf("expected 3 buy orders (including more), got %d", len(res.BuyOrders))
+			if len(res.BuyOrders) != 6 {
+				t.Errorf("expected 6 buy orders (including more), got %d", len(res.BuyOrders))
 			}
 		},
 	})
@@ -127,3 +173,4 @@ func TestCreateBuyOrder(t *testing.T) {
 		},
 	})
 }
+
