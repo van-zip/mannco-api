@@ -270,6 +270,18 @@ func TestBuyOrderPayloadUnmarshalJSON(t *testing.T) {
 			t.Fatal("expected error for invalid price type, got nil")
 		}
 	})
+
+	t.Run("missing_informations_envelope", func(t *testing.T) {
+		var payload BuyOrderPayload
+		// Missing 'informations' key entirely - should return ErrNoInformations
+		err := json.Unmarshal([]byte(`{"other_key": "value"}`), &payload)
+		if err == nil {
+			t.Fatal("expected error for missing informations envelope, got nil")
+		}
+		if !errors.Is(err, ErrNoInformations) {
+			t.Errorf("expected ErrNoInformations, got %v", err)
+		}
+	})
 }
 
 func TestUserItemBuyOrder(t *testing.T) {
@@ -294,6 +306,29 @@ func TestUserItemBuyOrder(t *testing.T) {
 			}
 			if res.Timestamp != time.Unix(1706745600, 0) {
 				t.Errorf("expected timestamp 1706745600, got %v", res.Timestamp)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[UserItemBuyOrderPayload]{
+		name:           "UserItemBuyOrder_missing_envelope",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"other_key": "value"}}`,
+		expectedPath:   "/user/buyorder/98765",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (UserItemBuyOrderPayload, error) {
+			return client.UserItemBuyOrder(ctx, 98765)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error for missing informations envelope, got nil")
+			}
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Errorf("expected *APIError, got %T: %v", err, err)
+			}
+			if apiErr == nil || !strings.Contains(apiErr.Message, "missing 'informations' envelope") {
+				t.Errorf("expected missing envelope error, got: %v", err)
 			}
 		},
 	})

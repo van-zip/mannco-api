@@ -4,10 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"time"
+)
+
+// API envelope key constants
+const (
+	envelopeKeyInformations = "informations"
+	envelopeKeyMore         = "more"
+	timestampKey            = "timestamp"
 )
 
 // UserItemBuyOrderPayload is the payload returned by UserItemBuyOrder
@@ -18,33 +26,61 @@ type UserItemBuyOrderPayload struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// UnmarshalJSON handles converting the API response into readable responses
-func (u *UserItemBuyOrderPayload) UnmarshalJSON(data []byte) error {
-	var dto struct {
-		Informations *struct {
-			ID        int    `json:"id"`
-			Price     int    `json:"price"`
-			Amount    int    `json:"amount"`
-			Timestamp string `json:"timestamp"`
-		} `json:"informations"`
+// ErrNoInformations is returned when the API response is missing the 'informations' envelope
+var ErrNoInformations = errors.New("missing 'informations' envelope in API response")
+
+// unwrapEnvelope extracts the raw JSON for the given key from an API response envelope.
+// Returns the raw JSON message.
+// If the envelope key exists but is null/empty/empty-object, returns empty RawMessage with no error (valid empty response).
+// If the envelope key is missing entirely, returns ErrNoInformations.
+func unwrapEnvelope(data []byte, key string) (json.RawMessage, error) {
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return nil, err
 	}
 
-	if err := json.Unmarshal(data, &dto); err != nil {
+	raw, ok := envelope[key]
+	if !ok {
+		// Key is missing entirely - this is an invalid/unexpected API response
+		return nil, ErrNoInformations
+	}
+
+	// Key exists but is null, empty, or empty object - valid empty response
+	if len(raw) == 0 || string(raw) == "null" || string(raw) == "{}" {
+		return json.RawMessage(""), nil
+	}
+
+	return raw, nil
+}
+
+// UnmarshalJSON handles converting the API response into readable responses
+func (u *UserItemBuyOrderPayload) UnmarshalJSON(data []byte) error {
+	// Define the inner structure we expect inside 'informations'
+	type infoDTO struct {
+		ID        int    `json:"id"`
+		Price     int    `json:"price"`
+		Amount    int    `json:"amount"`
+		Timestamp string `json:"timestamp"`
+	}
+
+	raw, err := unwrapEnvelope(data, envelopeKeyInformations)
+	if err != nil {
 		return err
 	}
 
-	if dto.Informations == nil {
-		return nil
+	var dto infoDTO
+	if err := json.Unmarshal(raw, &dto); err != nil {
+		return err
 	}
 
-	u.ID = dto.Informations.ID
-	u.Price = dto.Informations.Price
-	u.Amount = dto.Informations.Amount
+	u.ID = dto.ID
+	u.Price = dto.Price
+	u.Amount = dto.Amount
 
-	if dto.Informations.Timestamp != "" {
-		t, err := strconv.ParseInt(dto.Informations.Timestamp, 10, 64)
+	if dto.Timestamp != "" {
+		t, err := strconv.ParseInt(dto.Timestamp, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid timestamp format %q: %w", dto.Informations.Timestamp, err)
+			return fmt.Errorf("invalid timestamp format %q: %w", dto.Timestamp, err)
 		}
 		u.Timestamp = time.Unix(t, 0)
 	}
@@ -72,41 +108,52 @@ type BuyOrderPayload struct {
 
 // UnmarshalJSON handles the inconsistently shaped responses from the upstream API
 func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
-	// Unwraps to just the Informations entry of the json
-	var envelope struct {
-		Informations json.RawMessage `json:"informations"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
+	raw, err := unwrapEnvelope(data, envelopeKeyInformations)
+	if err != nil {
+		// If there's no envelope, try direct unmarshal (for backward compatibility / tests)
+		// but only if the error is specifically about missing envelope
+		if errors.Is(err, ErrNoInformations) {
+			// Allow empty array or null at top level for tests
+			if len(bytes.TrimSpace(data)) == 0 || string(bytes.TrimSpace(data)) == "null" {
+				return nil
+			}
+			// Try unmarshaling directly as array
+			var arr []BuyOrderInfo
+			if json.Unmarshal(data, &arr) == nil {
+				b.BuyOrders = arr
+				return nil
+			}
+		}
 		return err
 	}
 
-	raw := bytes.TrimSpace(envelope.Informations)
-	if len(raw) == 0 || string(raw) == "null" {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
 		// No buy orders
 		return nil
 	}
 
-	// The upstream API either returns a JSON map using 'tiers' or just an array
-	// Handle the array
-	if raw[0] == '[' {
+	// The upstream API either returns a JSON array or a map with numeric keys + optional "more"
+	// Handle the array case
+	if trimmed[0] == '[' {
 		var arr []BuyOrderInfo
-		if err := json.Unmarshal(raw, &arr); err != nil {
+		if err := json.Unmarshal(trimmed, &arr); err != nil {
 			return err
 		}
 		b.BuyOrders = arr
 		return nil
 	}
 
-	// Handle the map
+	// Handle the map case
 	var obj map[string]BuyOrderInfo
-	if err := json.Unmarshal(raw, &obj); err != nil {
+	if err := json.Unmarshal(trimmed, &obj); err != nil {
 		return err
 	}
 
 	var more *BuyOrderInfo
 	keys := make([]int, 0, len(obj))
 	for k := range obj {
-		if k == "more" {
+		if k == envelopeKeyMore {
 			v := obj[k]
 			more = &v
 			continue
