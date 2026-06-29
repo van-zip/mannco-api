@@ -194,5 +194,5 @@ type UserBuyOrderItem struct {
 
 // BuyOrderCount contains the total count of buy orders
 type BuyOrderCount struct {
-	Nb int `json:"nb"`
+	Count int `json:"nb"`
 }
