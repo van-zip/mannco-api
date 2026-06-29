@@ -7,12 +7,62 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 )
+
+// UserItemBuyOrderPayload is the payload returned by UserItemBuyOrder
+type UserItemBuyOrderPayload struct {
+	ID        int       `json:"id"`
+	Price     int       `json:"price"`
+	Amount    int       `json:"amount"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// UnmarshalJSON handles converting the API response into readable responses
+func (u *UserItemBuyOrderPayload) UnmarshalJSON(data []byte) error {
+	var dto struct {
+		Informations *struct {
+			ID        int    `json:"id"`
+			Price     int    `json:"price"`
+			Amount    int    `json:"amount"`
+			Timestamp string `json:"timestamp"`
+		} `json:"informations"`
+	}
+
+	if err := json.Unmarshal(data, &dto); err != nil {
+		return err
+	}
+
+	if dto.Informations == nil {
+		return nil
+	}
+
+	u.ID = dto.Informations.ID
+	u.Price = dto.Informations.Price
+	u.Amount = dto.Informations.Amount
+
+	if dto.Informations.Timestamp != "" {
+		t, err := strconv.ParseInt(dto.Informations.Timestamp, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid timestamp format %q: %w", dto.Informations.Timestamp, err)
+		}
+		u.Timestamp = time.Unix(t, 0)
+	}
+
+	return nil
+}
 
 // BuyOrderInfo is a specific buy order
 type BuyOrderInfo struct {
 	Count int `json:"count"`
 	Price int `json:"price"`
+}
+
+// buyOrderRequest represents to build a buy order request
+type buyOrderRequest struct {
+	ItemID int `json:"itemid"`
+	Value  int `json:"value"`
+	Amount int `json:"amount"`
 }
 
 // BuyOrderPayload is the returned payload from the API
@@ -80,13 +130,6 @@ func (b *BuyOrderPayload) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// buyOrderRequest represents to build a buy order request
-type buyOrderRequest struct {
-	ItemID int `json:"itemid"`
-	Value  int `json:"value"`
-	Amount int `json:"amount"`
-}
-
 // BuyOrderList gets the active buy orders for an item ID
 func (c *Client) BuyOrderList(ctx context.Context, itemID int) (BuyOrderPayload, error) {
 	return executeRequest[BuyOrderPayload](ctx, c, "GET", "item/buyorderList/"+strconv.Itoa(itemID), nil, nil)
@@ -105,4 +148,9 @@ func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) 
 	}
 	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder", jsonData, nil)
 	return err
+}
+
+// UserItemBuyOrder gets the logged in user's buy orders for a specific item id
+func (c *Client) UserItemBuyOrder(ctx context.Context, itemID int) (UserItemBuyOrderPayload, error) {
+	return executeRequest[UserItemBuyOrderPayload](ctx, c, "GET", "user/buyorder/"+strconv.Itoa(itemID), nil, nil)
 }
