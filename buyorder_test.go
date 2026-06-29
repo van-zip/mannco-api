@@ -7,28 +7,14 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuyOrderList(t *testing.T) {
 	runAPITest(t, testCase[BuyOrderPayload]{
-		name:       "BuyOrderList_success_array",
-		mockStatus: 200,
-		mockResponse: `{
-  "err": false,
-  "success": true,
-  "content": {
-    "informations": [
-      {
-        "count": 1,
-        "price": 191200
-      },
-      {
-        "count": 1,
-        "price": 191000
-      }
-    ]
-  }
-}`,
+		name:           "BuyOrderList_success_array",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"informations":[{"count":1,"price":191200},{"count":1,"price":191000}]}}`,
 		expectedPath:   "/item/buyorderList/174119",
 		expectedMethod: "GET",
 		runTest: func(ctx context.Context, client *Client) (BuyOrderPayload, error) {
@@ -45,40 +31,9 @@ func TestBuyOrderList(t *testing.T) {
 	})
 
 	runAPITest(t, testCase[BuyOrderPayload]{
-		name:       "BuyOrderList_success_object_with_more",
-		mockStatus: 200,
-		mockResponse: `{
-  "err": false,
-  "success": true,
-  "content": {
-    "informations": {
-      "0": {
-        "count": 1,
-        "price": 4153
-      },
-      "1": {
-        "count": 5,
-        "price": 4150
-      },
-      "2": {
-        "count": 2,
-        "price": 4000
-      },
-      "3": {
-        "count": 1,
-        "price": 3720
-      },
-      "4": {
-        "count": 1,
-        "price": 3687
-      },
-      "more": {
-        "count": 125,
-        "price": 3524
-      }
-    }
-  }
-}`,
+		name:           "BuyOrderList_success_object_with_more",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"informations":{"0":{"count":1,"price":4153},"1":{"count":5,"price":4150},"2":{"count":2,"price":4000},"3":{"count":1,"price":3720},"4":{"count":1,"price":3687},"more":{"count":125,"price":3524}}}}`,
 		expectedPath:   "/item/buyorderList/371",
 		expectedMethod: "GET",
 		runTest: func(ctx context.Context, client *Client) (BuyOrderPayload, error) {
@@ -317,3 +272,29 @@ func TestBuyOrderPayloadUnmarshalJSON(t *testing.T) {
 	})
 }
 
+func TestUserItemBuyOrder(t *testing.T) {
+	runAPITest(t, testCase[UserItemBuyOrderPayload]{
+		name:           "UserItemBuyOrder_success",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"informations":{"id":98765,"steamid":"76561198000000000","itemid":12345,"price":15000,"amount":3,"timestamp":"1706745600"}}}`,
+		expectedPath:   "/user/buyorder/98765",
+		expectedMethod: "GET",
+		runTest: func(ctx context.Context, client *Client) (UserItemBuyOrderPayload, error) {
+			return client.UserItemBuyOrder(ctx, 98765)
+		},
+		assertResponse: func(t *testing.T, res UserItemBuyOrderPayload) {
+			if res.ID != 98765 {
+				t.Errorf("expected id 98765, got %d", res.ID)
+			}
+			if res.Price != 15000 {
+				t.Errorf("expected price 15000, got %d", res.Price)
+			}
+			if res.Amount != 3 {
+				t.Errorf("expected amount 3, got %d", res.Amount)
+			}
+			if res.Timestamp != time.Unix(1706745600, 0) {
+				t.Errorf("expected timestamp 1706745600, got %v", res.Timestamp)
+			}
+		},
+	})
+}
