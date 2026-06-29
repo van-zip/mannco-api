@@ -331,8 +331,8 @@ func TestGetUserBuyOrders(t *testing.T) {
 			if res.Values[0].Game != 440 {
 				t.Errorf("expected game 440, got %d", res.Values[0].Game)
 			}
-			if res.Count.Nb != 15 {
-				t.Errorf("expected count 15, got %d", res.Count.Nb)
+			if res.Count.Count != 15 {
+				t.Errorf("expected count 15, got %d", res.Count.Count)
 			}
 		},
 	})
