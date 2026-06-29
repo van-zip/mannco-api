@@ -134,12 +134,3 @@ func TestPurchaseHistory(t *testing.T) {
 		assertResponse: func(_ *testing.T, _ InventoryPayload) {},
 	})
 }
-
-func TestUserLoginJSONMarshalError(t *testing.T) {
-	// This test is a bit tricky because we can't easily trigger a JSON marshal error
-	// with a normal string. The only way would be to pass something that can't be
-	// marshaled to JSON. Since apiKey is a string, it always marshals correctly.
-	// This test documents that the error path exists but is practically unreachable
-	// with the current function signature.
-	t.Log("UserLogin JSON marshal error path is not testable with current signature (string always marshals)")
-}
