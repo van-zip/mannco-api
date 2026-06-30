@@ -30,6 +30,28 @@ func unwrapEnvelope(data []byte, key string) (json.RawMessage, error) {
 	return raw, nil
 }
 
+// BulkBuyOrderEntry represents a single buy order entry in a bulk request
+type BulkBuyOrderEntry struct {
+	ItemID int `json:"itemid"`
+	Value  int `json:"value"`
+	Amount int `json:"amount"`
+}
+
+// BulkBuyOrderResult represents the result of a single entry in a bulk buy order request
+type BulkBuyOrderResult struct {
+	ItemID  int    `json:"itemid"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// BulkBuyOrdersContent represents the content of the bulk buy orders response
+type BulkBuyOrdersContent struct {
+	Total     int                  `json:"total"`
+	Processed int                  `json:"processed"`
+	Errors    int                  `json:"errors"`
+	Results   []BulkBuyOrderResult `json:"results"`
+}
+
 // UserBuyOrdersPayload is the payload returned by GetUserBuyOrders
 type UserBuyOrdersPayload struct {
 	Values []UserBuyOrderItem `json:"values"`
@@ -185,6 +207,50 @@ func (c *Client) CreateBuyOrder(ctx context.Context, itemID, value, amount int) 
 	}
 	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder", jsonData, nil)
 	return err
+}
+
+// UpdateBuyOrder updates an existing buy order for an item with a new price and/or quantity.
+func (c *Client) UpdateBuyOrder(ctx context.Context, itemID, value, amount int) error {
+	payload := buyOrderRequest{
+		ItemID: itemID,
+		Value:  value,
+		Amount: amount,
+	}
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("error encoding json for updating buy order: %w", err)
+	}
+	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder/update", jsonData, nil)
+	return err
+}
+
+// RemoveBuyOrder cancels and removes a buy order for an item, releasing the reserved balance.
+func (c *Client) RemoveBuyOrder(ctx context.Context, itemID int) error {
+	jsonData, err := json.Marshal(map[string]int{"itemid": itemID})
+	if err != nil {
+		return fmt.Errorf("error encoding json for removing buy order: %w", err)
+	}
+	_, err = executeRequest[json.RawMessage](ctx, c, "POST", "item/buyorder/remove", jsonData, nil)
+	return err
+}
+
+// BulkBuyOrders processes up to 100 buy orders in a single request.
+// For each entry, a new buy order is inserted, an existing one is updated,
+// or it is removed when both value and amount are 0.
+func (c *Client) BulkBuyOrders(ctx context.Context, orders []BulkBuyOrderEntry) (BulkBuyOrdersContent, error) {
+	if len(orders) > MaxBulkItems {
+		return BulkBuyOrdersContent{}, fmt.Errorf("%w: maximum 100 orders allowed in bulk request", ErrInternal)
+	}
+	payload := struct {
+		Orders []BulkBuyOrderEntry `json:"orders"`
+	}{
+		Orders: orders,
+	}
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return BulkBuyOrdersContent{}, fmt.Errorf("error encoding json for bulk buy orders: %w", err)
+	}
+	return executeRequest[BulkBuyOrdersContent](ctx, c, "POST", "item/buyorder/bulk", jsonData, nil)
 }
 
 // UserItemBuyOrder gets the logged in user's buy orders for a specific item id

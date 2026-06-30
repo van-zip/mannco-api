@@ -304,7 +304,7 @@ func TestGetUserBuyOrders(t *testing.T) {
 		name:           "GetUserBuyOrders_success",
 		mockStatus:     200,
 		mockResponse:   `{"err":false,"success":true,"content":{"values":[{"id":98765,"itemid":12345,"price":15000,"amount":3,"name":"Burning Flames Team Captain","game":440}],"count":{"nb":15}}}`,
-		expectedPath:   "/user/buyorders",
+		expectedPath:   "/user/getBuyorder",
 		expectedMethod: "GET",
 		runTest: func(ctx context.Context, client *Client) (UserBuyOrdersPayload, error) {
 			return client.GetUserBuyOrders(ctx)
@@ -333,6 +333,209 @@ func TestGetUserBuyOrders(t *testing.T) {
 			}
 			if res.Count.Count != 15 {
 				t.Errorf("expected count 15, got %d", res.Count.Count)
+			}
+		},
+	})
+}
+
+func TestUpdateBuyOrder(t *testing.T) {
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "UpdateBuyOrder_success",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"message":"Buy order updated","content":{}}`,
+		expectedPath:   "/item/buyorder/update",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.UpdateBuyOrder(ctx, 12345, 16000, 5)
+		},
+		assertResponse: func(_ *testing.T, _ json.RawMessage) {},
+	})
+
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "UpdateBuyOrder_unauthorized",
+		mockStatus:     403,
+		mockResponse:   `{"err":true,"success":false,"message":"Invalid API key","content":null}`,
+		expectedPath:   "/item/buyorder/update",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.UpdateBuyOrder(ctx, 12345, 16000, 5)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, ErrUnauthorized) {
+				t.Errorf("expected unauthorized error, got: %v", err)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "UpdateBuyOrder_business_error",
+		mockStatus:     300,
+		mockResponse:   `{"err":true,"success":false,"message":"You don't have a buy order for this item","content":null}`,
+		expectedPath:   "/item/buyorder/update",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.UpdateBuyOrder(ctx, 12345, 16000, 5)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "You don't have a buy order") {
+				t.Errorf("expected business error about missing buy order, got: %v", err)
+			}
+		},
+	})
+}
+
+func TestRemoveBuyOrder(t *testing.T) {
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "RemoveBuyOrder_success",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"message":"Removed","content":{}}`,
+		expectedPath:   "/item/buyorder/remove",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.RemoveBuyOrder(ctx, 12345)
+		},
+		assertResponse: func(_ *testing.T, _ json.RawMessage) {},
+	})
+
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "RemoveBuyOrder_unauthorized",
+		mockStatus:     403,
+		mockResponse:   `{"err":true,"success":false,"message":"Invalid API key","content":null}`,
+		expectedPath:   "/item/buyorder/remove",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.RemoveBuyOrder(ctx, 12345)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, ErrUnauthorized) {
+				t.Errorf("expected unauthorized error, got: %v", err)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[json.RawMessage]{
+		name:           "RemoveBuyOrder_not_found",
+		mockStatus:     300,
+		mockResponse:   `{"err":true,"success":false,"message":"No buy order found","content":null}`,
+		expectedPath:   "/item/buyorder/remove",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (json.RawMessage, error) {
+			return nil, client.RemoveBuyOrder(ctx, 12345)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "No buy order found") {
+				t.Errorf("expected 'No buy order found' error, got: %v", err)
+			}
+		},
+	})
+}
+
+func TestBulkBuyOrders(t *testing.T) {
+	runAPITest(t, testCase[BulkBuyOrdersContent]{
+		name:           "BulkBuyOrders_success",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{"total":3,"processed":2,"errors":1,"results":[{"itemid":123,"status":"inserted","message":"Inserted"},{"itemid":456,"status":"updated","message":"Buy order updated"},{"itemid":321,"status":"error","message":"No buy order found"}]}}`,
+		expectedPath:   "/item/buyorder/bulk",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (BulkBuyOrdersContent, error) {
+			return client.BulkBuyOrders(ctx, []BulkBuyOrderEntry{
+				{ItemID: 123, Value: 50, Amount: 2},
+				{ItemID: 456, Value: 10, Amount: 5},
+				{ItemID: 321, Value: 0, Amount: 0},
+			})
+		},
+		assertResponse: func(t *testing.T, res BulkBuyOrdersContent) {
+			if res.Total != 3 {
+				t.Errorf("expected total=3, got %d", res.Total)
+			}
+			if res.Processed != 2 {
+				t.Errorf("expected processed=2, got %d", res.Processed)
+			}
+			if res.Errors != 1 {
+				t.Errorf("expected errors=1, got %d", res.Errors)
+			}
+			if len(res.Results) != 3 {
+				t.Errorf("expected 3 results, got %d", len(res.Results))
+			}
+			if res.Results[0].ItemID != 123 || res.Results[0].Status != "inserted" {
+				t.Errorf("expected first result itemid=123 status=inserted, got itemid=%d status=%s", res.Results[0].ItemID, res.Results[0].Status)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[BulkBuyOrdersContent]{
+		name:           "BulkBuyOrders_unauthorized",
+		mockStatus:     403,
+		mockResponse:   `{"err":true,"success":false,"message":"Invalid API key","content":null}`,
+		expectedPath:   "/item/buyorder/bulk",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (BulkBuyOrdersContent, error) {
+			return client.BulkBuyOrders(ctx, []BulkBuyOrderEntry{
+				{ItemID: 123, Value: 50, Amount: 2},
+			})
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, ErrUnauthorized) {
+				t.Errorf("expected unauthorized error, got: %v", err)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[BulkBuyOrdersContent]{
+		name:           "BulkBuyOrders_rate_limited",
+		mockStatus:     429,
+		mockResponse:   `{"err":true,"success":false,"message":"Rate limit exceeded. Retry after 60 seconds."}`,
+		expectedPath:   "/item/buyorder/bulk",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (BulkBuyOrdersContent, error) {
+			return client.BulkBuyOrders(ctx, []BulkBuyOrderEntry{
+				{ItemID: 123, Value: 50, Amount: 2},
+			})
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "Rate limit exceeded") {
+				t.Errorf("expected rate limit error, got: %v", err)
+			}
+		},
+	})
+
+	runAPITest(t, testCase[BulkBuyOrdersContent]{
+		name:           "BulkBuyOrders_too_many_orders",
+		mockStatus:     200,
+		mockResponse:   `{"err":false,"success":true,"content":{}}`,
+		expectedPath:   "/item/buyorder/bulk",
+		expectedMethod: "POST",
+		runTest: func(ctx context.Context, client *Client) (BulkBuyOrdersContent, error) {
+			orders := make([]BulkBuyOrderEntry, 101)
+			for i := range orders {
+				orders[i] = BulkBuyOrderEntry{ItemID: i + 1, Value: 10, Amount: 1}
+			}
+			return client.BulkBuyOrders(ctx, orders)
+		},
+		assertError: func(t *testing.T, err error) {
+			if err == nil {
+				t.Fatal("expected error for >100 orders, got nil")
+			}
+			if !strings.Contains(err.Error(), "maximum 100 orders allowed") {
+				t.Errorf("expected max orders error, got: %v", err)
 			}
 		},
 	})

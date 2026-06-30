@@ -43,8 +43,8 @@ type BalancePayload struct {
 	Balance int `json:"balance"`
 }
 
-// MaxBulkPricingItems is the maximum number of item IDs that can be provided to the bulk pricing endpoint
-const MaxBulkPricingItems = 100
+// MaxBulkItems is the maximum number of item IDs that can be provided to the bulk pricing endpoint
+const MaxBulkItems = 100
 
 // An Item represents a specific item and all its attributes
 type Item struct {
@@ -152,8 +152,8 @@ func (c *Client) ItemPricing(ctx context.Context, itemID int) (PriceItem, error)
 
 // ItemPricingBulk performs ItemPricing() but on up to 100 itemIDs
 func (c *Client) ItemPricingBulk(ctx context.Context, itemIDs []int) (BulkPricingPayload, error) {
-	if len(itemIDs) > MaxBulkPricingItems {
-		return BulkPricingPayload{}, fmt.Errorf("%w: the pricing bulk endpoint has a limit of %d ids", ErrInternal, MaxBulkPricingItems)
+	if len(itemIDs) > MaxBulkItems {
+		return BulkPricingPayload{}, fmt.Errorf("%w: the pricing bulk endpoint has a limit of %d ids", ErrInternal, MaxBulkItems)
 	}
 	idStrings := make([]string, len(itemIDs))
 	for i, id := range itemIDs {
