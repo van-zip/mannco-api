@@ -12,6 +12,7 @@ A Go API client for [Mannco.store](https://mannco.store) a Team Fortress 2, CS2,
 |----------|----------|
 | **Authentication** | API key -> JWT exchange |
 | **Items & Pricing** | Sales graphs, listings, buy orders, pricing (single & bulk up to 100 items) |
+| **User Buy Orders** | View your active buy orders (specific item or all) |
 | **Market Orders** | Create buy orders |
 | **User & History** | Balance, transaction / sales / purchase history |
 | **Trades & Inventory** | Planned, offers, inventory, deposits, trades |
@@ -123,7 +124,7 @@ item, err := client.ItemPricing(ctx, itemID)
 // GET /item/pricing/bulk?items=1,2,3 (max 100)
 bulk, err := client.ItemPricingBulk(ctx, []int{371, 958, 803})
 
-// GET /item/salesGraph/{item}?period=1month
+// GET /item/salesGraph/{item}?period=1M
 graph, err := client.ItemSalesGraph(ctx, itemID, mannco.Period1Month)
 
 // GET /item/listing/{item}[/{user}]?count=10&page=1&game=440
@@ -137,15 +138,10 @@ listings, err := client.ItemListings(ctx, itemID, "", &mannco.ListingOptions{
 buyOrders, err := client.BuyOrderList(ctx, itemID)
 
 // POST /item/buyorder
-order, err := client.CreateBuyOrder(ctx, &mannco.CreateBuyOrderRequest{
-    ItemID:  371,
-    Price:   1500,     // cents
-    Quantity: 1,
-    AutoBuy: true,
-})
+err := client.CreateBuyOrder(ctx, 371, 1500, 1) // itemID, price (cents), quantity
 ```
 
-**Pricing periods** (`mannco.Period`): `Period1Day`, `Period1Week`, `Period1Month`, `Period3Months`, `Period6Months`, `Period1Year`, `PeriodAllTime`.
+**Pricing periods** (`mannco.Period`): `Period1Month`, `Period3Months`, `Period6Months`, `Period1Year`, `Period5Years`, `PeriodAll`.
 
 ---
 
@@ -156,12 +152,14 @@ order, err := client.CreateBuyOrder(ctx, &mannco.CreateBuyOrderRequest{
 balance, err := client.Balance(ctx) // returns cents
 
 // GET /user/getTransactionHistory
+// Note: HistoryOptions.Limit maps to "limit" query param
 txns, err := client.TransactionHistory(ctx, &mannco.HistoryOptions{
     Page:  1,
     Limit: 50,
 })
 
 // GET /user/getSalesHistory
+// Note: HistoryOptions.Limit maps to "perPage" query param
 sales, err := client.SalesHistory(ctx, &mannco.HistoryOptions{
     Page:    1,
     Limit:   50,
@@ -170,10 +168,23 @@ sales, err := client.SalesHistory(ctx, &mannco.HistoryOptions{
 })
 
 // GET /user/getPurchaseHistory
+// Note: HistoryOptions.Limit maps to "count" query param
 purchases, err := client.PurchaseHistory(ctx, &mannco.HistoryOptions{
     Page:  1,
     Limit: 50,
 })
+```
+
+---
+
+### User Buy Orders
+
+```go
+// GET /user/buyorder/{itemID}
+buyOrder, err := client.UserItemBuyOrder(ctx, 371)
+
+// GET /user/buyorders
+buyOrders, err := client.GetUserBuyOrders(ctx)
 ```
 
 ---
