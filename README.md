@@ -1,71 +1,205 @@
-# WARNING THIS IS *NOT* A COMPLETE LIBRARY USE AT YOUR OWN RISK
-# Mannco.store API Wrapper
+# mannco-go
 
-A Go wrapper for the Mannco.store API (`https://docs.mannco.store`)
+A Go API client for [Mannco.store](https://mannco.store) a Team Fortress 2, CS2, and Rust item trading marketplace.
 
-## Implementation Progress
-- [x] **Base Architecture**
-  - [x] Global Base URL Configuration
-  - [x] Unified API response payload wrapper (`ApiResponse[T]`)
-  - [x] Generic HTTP execution pipeline (`executeRequest[T]`)
-  - [x] Context (`context.Context`) boundary passing
-  - [x] Automatic Bearer Token injection headers
-  - [x] Client-level active JWT state management (`SetJWT`)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ---
-### [Authentication & Session](https://docs.mannco.store/api-reference/authentication)
-- [x] **Login & Tokens**
-  - [x] `POST /user/login`  Exchange API key for a fresh session JWT (`UserLogin`)
+
+## Features
+
+| Category | Coverage |
+|----------|----------|
+| **Authentication** | API key -> JWT exchange |
+| **Items & Pricing** | Sales graphs, listings, buy orders, pricing (single & bulk up to 100 items) |
+| **Market Orders** | Create buy orders |
+| **User & History** | Balance, transaction / sales / purchase history |
+| **Trades & Inventory** | Planned, offers, inventory, deposits, trades |
+| **Cart & Checkout** | Planned, cart operations |
+
+> **Status**: This library covers the endpoints relevant to my own project. Many trade, inventory, and cart endpoints are not yet implemented.
+
 ---
-### [Items & Pricing](https://docs.mannco.store/api-reference/items)
-- [x] **Item Discovery & Stats**
-  - [x] `GET /item/salesGraph/{item}`  High-resolution historical trade data (`ItemSalesGraph`)
-  - [x] `GET /item/listing/{item}`  Paginated market listings with user/bot filtering (`ItemListings`)
-  - [x] `GET /item/buyorderList/{item}`  Active multi-tier purchasing demands (`BuyOrderList`)
-- [x] **Pricing Evaluations**
-  - [x] `GET /item/pricing/{item}`  Individual cached & suggested valuation statistics (`ItemPricing`)
-  - [x] `GET /item/pricing/bulk`  Max 100 ID vectorized pricing requests (`ItemPricingBulk`)
-- [x] **Market Orders**
-  - [x] `POST /item/buyorder`  Create new automatic buy orders (`CreateBuyOrder`)
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+
+    "github.com/van-zip/mannco-go"
+)
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    // Custom HTTP client (optional, nil uses a 60s default)
+    httpClient := &http.Client{Timeout: 10 * time.Second}
+
+    // Create client with empty JWT; will be populated after login
+    client := mannco.NewClient("", httpClient)
+
+    // Exchange API key for JWT
+    apiKey := "your-mannco-store-api-key"
+    _, err := client.UserLogin(ctx, apiKey)
+    if err != nil {
+        log.Fatalf("login failed: %v", err)
+    }
+
+    // Check balance (returned in cents)
+    balance, err := client.Balance(ctx)
+    if err != nil {
+        log.Fatalf("balance: %v", err)
+    }
+    fmt.Printf("Balance: $%.2f\n", float64(balance)/100)
+
+    // Bulk pricing for up to 100 items (Max's Head, Earbuds, Bill's Hat)
+    bulk, err := client.ItemPricingBulk(ctx, []int{371, 958, 803})
+    if err != nil {
+        log.Fatalf("bulk pricing: %v", err)
+    }
+
+    for _, item := range bulk.Items {
+        fmt.Printf("Item %d | Lowest sale: $%.2f | Suggested: $%.2f\n",
+            item.ItemID,
+            float64(item.Pricing.LowestSalePrice)/100,
+            float64(item.Pricing.SuggestedPrice)/100,
+        )
+    }
+}
+```
+
+Run it:
+
+```bash
+go run examples/example.go
+```
+
 ---
-### [User Profiles & History](https://docs.mannco.store/api-reference/user)
-- [x] **Account Data**
-  - [x] `GET /user/balance`  Direct wallet integer cents querying (`Balance`)
-- [x] **Historical Ledgers**
-  - [x] `GET /user/getTransactionHistory`  Internal balances logs (`TransactionHistory`)
-  - [x] `GET /user/getSalesHistory`  Searchable vendor transaction lines (`SalesHistory`)
-  - [x] `GET /user/getPurchaseHistory`  Historical site acquisitions (`PurchaseHistory`)
-  - [ ] `GET /user/getCashoutHistory`
-  - [ ] `GET /user/getTransactionDetails`
+
+## API Reference
+
+### Client
+
+```go
+client := mannco.NewClient(jwt string, httpClient *http.Client)
+```
+
+| Method | Description |
+|--------|-------------|
+| `SetJWT(token string)` | Update the bearer token |
+| `GetJWT() string` | Retrieve current token |
+| `SetBaseURL(url string)` | Override API base URL (useful for testing) |
+| `GetBaseURL() string` | Get current base URL |
+
+All methods accept `context.Context` as the first argument for cancellation/timeout control.
+
 ---
-### [Trade Offers](https://docs.mannco.store/api-reference/offers)
-- [ ] **Offer Intake & Operations**
-  - [ ] `GET /offers/received`
-  - [ ] `GET /offers/my`
-  - [ ] `POST /offers/create`
-  - [ ] `POST /offers/accept`
-  - [ ] `POST /offers/decline`
-  - [ ] `POST /offers/remove`
+
+### Authentication
+
+```go
+// POST /user/login
+jwt, err := client.UserLogin(ctx, apiKey)
+```
+
+Exchanges an API key for a session JWT. The returned token is also stored on the client automatically.
+
 ---
-### [On-Site Inventories & Bot Logistics](https://docs.mannco.store/api-reference/inventory)
-- [ ] **Virtual Wallets**
-  - [ ] `GET /inventory/onSale`
-  - [ ] `GET /inventory/onInventory`
-  - [ ] `POST /inventory/withdraw`
-  - [ ] `POST /inventory/price`
-- [ ] **Steam Network Trades**
-  - [ ] `GET /trades/active`
-  - [ ] `GET /trades/all`
-  - [ ] `GET /trade/resend`
-- [ ] **Deposit Gateway**
-  - [ ] `POST /deposit/trade`
-  - [ ] `POST /deposit/trade/instant`
-  - [ ] `GET /deposit/tradeStatus/{tradeid}`
+
+### Items & Pricing
+
+```go
+// GET /item/pricing/{item}
+item, err := client.ItemPricing(ctx, itemID)
+
+// GET /item/pricing/bulk?items=1,2,3 (max 100)
+bulk, err := client.ItemPricingBulk(ctx, []int{371, 958, 803})
+
+// GET /item/salesGraph/{item}?period=1month
+graph, err := client.ItemSalesGraph(ctx, itemID, mannco.Period1Month)
+
+// GET /item/listing/{item}[/{user}]?count=10&page=1&game=440
+listings, err := client.ItemListings(ctx, itemID, "", &mannco.ListingOptions{
+    Count: 20,
+    Page:  1,
+    Game:  440, // TF2
+})
+
+// GET /item/buyorderList/{item}
+buyOrders, err := client.BuyOrderList(ctx, itemID)
+
+// POST /item/buyorder
+order, err := client.CreateBuyOrder(ctx, &mannco.CreateBuyOrderRequest{
+    ItemID:  371,
+    Price:   1500,     // cents
+    Quantity: 1,
+    AutoBuy: true,
+})
+```
+
+**Pricing periods** (`mannco.Period`): `Period1Day`, `Period1Week`, `Period1Month`, `Period3Months`, `Period6Months`, `Period1Year`, `PeriodAllTime`.
+
 ---
-### [Cart & Checkout](https://docs.mannco.store/api-reference/cart)
-- [ ] **Cart Actions**
-  - [ ] `GET /cart/get`
-  - [ ] `POST /cart/add`
-  - [ ] `POST /cart/bulk`
-  - [ ] `POST /cart/remove`
-  - [ ] `POST /cart/update`
-  - [ ] `POST /cart/clear`
+
+### User & History
+
+```go
+// GET /user/balance
+balance, err := client.Balance(ctx) // returns cents
+
+// GET /user/getTransactionHistory
+txns, err := client.TransactionHistory(ctx, &mannco.HistoryOptions{
+    Page:  1,
+    Limit: 50,
+})
+
+// GET /user/getSalesHistory
+sales, err := client.SalesHistory(ctx, &mannco.HistoryOptions{
+    Page:    1,
+    Limit:   50,
+    Period:  mannco.Period1Month,
+    Search:  "unusual",
+})
+
+// GET /user/getPurchaseHistory
+purchases, err := client.PurchaseHistory(ctx, &mannco.HistoryOptions{
+    Page:  1,
+    Limit: 50,
+})
+```
+
+---
+
+## Testing
+
+```bash
+# Unit tests (mock HTTP)
+go test -v ./...
+
+# Integration tests (require MANNCO_API_KEY in .env or env)
+go test -v -tags=integration ./...
+```
+
+Integration tests require a valid API key in the environment
+
+```bash
+MANNCO_API_KEY=your_key_here go test -v -tags=integration ./...
+```
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE).
+
+---
+
+PRs welcome for missing endpoints!
